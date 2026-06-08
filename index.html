@@ -71,7 +71,7 @@
             z-index: 5;
         }
 
-        /* ================= RESPONSIVIDAD (MÓVIL PRIMERO) ================= */
+        /* ================= RESPONSIVIDAD ================= */
         @media (max-width: 767px) {
             .sidebar-panel {
                 width: 100%;
@@ -129,9 +129,11 @@
         
         .user-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: transparent; border-radius: 12px; }
         .user-item.active-chat-item { background: #121212; }
-        .user-meta { display: flex; align-items: center; gap: 12px; overflow: hidden; text-overflow: ellipsis; }
+        .user-meta { display: flex; align-items: center; gap: 12px; flex: 1; overflow: hidden; }
         .avatar-sm { width: 38px; height: 38px; border-radius: 50%; background: #262626; display: flex; justify-content: center; align-items: center; font-size: 0.9rem; font-weight: 600; color: #fff; flex-shrink: 0; }
         .online-dot { width: 7px; height: 7px; background: var(--success); border-radius: 50%; margin-top: 4px; }
+
+        .unread-badge { background: var(--danger); color: #fff; font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 20px; margin-left: auto; margin-right: 8px; animation: elasticPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 
         .btn-action { background: var(--accent-blue); color: #fff; border: none; padding: 7px 14px; border-radius: 8px; font-weight: 600; font-size: 0.8rem; cursor: pointer; flex-shrink: 0; }
         .btn-action.chat-go { background: #ffffff; color: #000000; }
@@ -207,16 +209,16 @@
                     </div>
                 </div>
                 <div class="search-box">
-                    <input type="text" id="searchUserField" placeholder="Buscar usuarios globales en línea..." oninput="filterDiscoveryUsers()">
+                    <input type="text" id="searchUserField" placeholder="Buscar usuario por nombre exacto..." oninput="filterDiscoveryUsers()">
                 </div>
             </div>
             
             <div class="section-title" id="reqsTitle" style="display:none; color: var(--warning);">Solicitudes de Seguimiento</div>
             <div class="user-list-scroll" id="requestsList" style="flex: initial; max-height: 160px;"></div>
 
-            <div class="section-title">Buscar nuevos usuarios</div>
+            <div class="section-title">Resultados de la búsqueda</div>
             <div class="user-list-scroll" id="discoveryList">
-                <p style="color: var(--text-muted); font-size: 0.8rem; padding: 15px; text-align: center;">Escaneando trazas de red...</p>
+                <p style="color: var(--text-muted); font-size: 0.8rem; padding: 15px; text-align: center;">Escribe en el buscador para encontrar usuarios...</p>
             </div>
 
             <div class="section-title" style="margin-top: 10px;">Mensajes Directos (Seguidos)</div>
@@ -290,12 +292,13 @@
         let localUid = "u_" + Math.random().toString(36).substr(2, 9);
         
         let discoveredPeers = {}; 
-        let followingUsers = JSON.parse(localStorage.getItem('p2p_following')) || []; 
         
-        // PERSISTENCIA DE SOLICITUDES E HISTORIALES
-        let pendingRequests = JSON.parse(localStorage.getItem('p2p_pending_requests')) || []; 
-        let sentRequests = JSON.parse(localStorage.getItem('p2p_sent_requests')) || []; 
+        // Sanitización estricta anti-duplicados al cargar arrays desde LocalStorage
+        let followingUsers = [...new Set(JSON.parse(localStorage.getItem('p2p_following')) || [])]; 
+        let pendingRequests = [...new Set(JSON.parse(localStorage.getItem('p2p_pending_requests')) || [])]; 
+        let sentRequests = [...new Set(JSON.parse(localStorage.getItem('p2p_sent_requests')) || [])]; 
         let chatHistories = JSON.parse(localStorage.getItem('p2p_chat_histories')) || {}; 
+        let unreadCounts = JSON.parse(localStorage.getItem('p2p_unread_counts')) || {};
 
         let activeChatPartner = "";
         let currentSecretRoomId = "";
@@ -330,6 +333,26 @@
             }
         });
 
+        function requestNotificationPermissions() {
+            if (!("Notification" in window)) return;
+            if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+                Notification.requestPermission();
+            }
+        }
+
+        function pushSystemNotification(sender, messageText) {
+            if (Notification.permission === "granted") {
+                const options = {
+                    body: messageText,
+                    icon: 'https://cdn-icons-png.flaticon.com/512/1384/1384063.png',
+                    vibrate: [200, 100, 200],
+                    tag: 'p2p-msg-' + sender,
+                    renotify: true
+                };
+                new Notification(`@${sender} te envió un mensaje`, options);
+            }
+        }
+
         function registerUserProfile() {
             const input = document.getElementById('usernameInput').value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
             if (input.length < 3) return alert("Usa al menos 3 caracteres alfanuméricos.");
@@ -341,6 +364,8 @@
             document.getElementById('myProfileName').innerText = `@${localUser}`;
             document.getElementById('myAvatarLetter').innerText = localUser.charAt(0).toUpperCase();
             document.getElementById('authScreenZone').style.display = "none";
+            
+            requestNotificationPermissions();
             initializeMqttNetwork();
         }
 
@@ -352,10 +377,16 @@
                 statusLabel.innerText = "● En línea";
                 statusLabel.style.color = "var(--success)";
 
-                // Canales globales y canal privado de control entrante
                 mqttClient.subscribe('insta/social/global/discovery');
                 mqttClient.subscribe(`insta/social/user/${localUser}/inbox`);
                 
+                followingUsers.forEach(peer => {
+                    const sortedCombination = [localUser, peer].sort();
+                    const roomId = btoa(sortedCombination[0] + "_" + sortedCombination[1]).replace(/=/g, "").substr(0, 15);
+                    mqttClient.subscribe(`insta/social/direct/${roomId}`);
+                });
+
+                requestNotificationPermissions();
                 announcePresence();
                 setInterval(announcePresence, 4000);
                 setInterval(purgeOfflinePeers, 8000);
@@ -379,52 +410,82 @@
                 try {
                     const data = JSON.parse(raw.toString());
 
-                    // 1. Red Global de Descubrimiento
                     if (topic === 'insta/social/global/discovery') {
                         if (data.username !== localUser) {
                             if (data.status === 'offline') {
                                 delete discoveredPeers[data.username];
                             } else {
+                                // Al usar data.username como propiedad clave de un objeto, se machaca el registro anterior garantizando que no se duplique
                                 discoveredPeers[data.username] = { uid: data.uid, lastSeen: Date.now() };
                             }
                             filterDiscoveryUsers();
                         }
                     } 
-                    // 2. Buzón de Solicitudes Privadas
                     else if (topic === `insta/social/user/${localUser}/inbox`) {
                         if (data.type === 'follow_req') {
                             if (!pendingRequests.includes(data.from) && !followingUsers.includes(data.from)) {
                                 pendingRequests.push(data.from);
+                                pendingRequests = [...new Set(pendingRequests)]; // Filtro preventivo de unicidad
                                 localStorage.setItem('p2p_pending_requests', JSON.stringify(pendingRequests));
                                 renderPendingRequests();
+                                pushSystemNotification(data.from, "Te ha enviado una solicitud de seguimiento.");
                             }
                         } else if (data.type === 'follow_accept') {
                             sentRequests = sentRequests.filter(u => u !== data.from);
                             localStorage.setItem('p2p_sent_requests', JSON.stringify(sentRequests));
                             if (!followingUsers.includes(data.from)) {
                                 followingUsers.push(data.from);
+                                followingUsers = [...new Set(followingUsers)]; // Filtro preventivo de unicidad
                                 localStorage.setItem('p2p_following', JSON.stringify(followingUsers));
+                                
+                                const sortedCombination = [localUser, data.from].sort();
+                                const roomId = btoa(sortedCombination[0] + "_" + sortedCombination[1]).replace(/=/g, "").substr(0, 15);
+                                mqttClient.subscribe(`insta/social/direct/${roomId}`);
                             }
                             filterDiscoveryUsers();
                             renderFollowingList();
+                            pushSystemNotification(data.from, "Aceptó tu solicitud. ¡Ya pueden chatear!");
                         } else if (data.type === 'follow_decline') {
                             sentRequests = sentRequests.filter(u => u !== data.from);
                             localStorage.setItem('p2p_sent_requests', JSON.stringify(sentRequests));
                             filterDiscoveryUsers();
                         }
                     }
-                    // 3. Sala de Conversación Activa
-                    else if (topic === `insta/social/direct/${currentSecretRoomId}`) {
+                    else if (topic.startsWith('insta/social/direct/')) {
+                        const roomInTopic = topic.split('/').pop();
+
                         if (data.type === 'msg') {
-                            renderMessageBubble(data);
-                        } else if (data.type === 'react') {
-                            updateReactionBadgeUI(data.id, data.emoji);
-                        } else if (data.type === 'kill') {
-                            const node = document.getElementById(`msg-${data.id}`);
-                            if (node) node.remove();
-                            removeMessageFromHistory(data.id);
-                        } else if (data.type === 'typing' && data.user !== localUser) {
-                            document.getElementById('typingLabel').innerText = data.isTyping ? `@${data.user} está escribiendo...` : '';
+                            if (roomInTopic === currentSecretRoomId) {
+                                renderMessageBubble(data);
+                                if (data.user !== localUser && document.hidden) {
+                                    pushSystemNotification(data.user, data.text);
+                                }
+                            } 
+                            else {
+                                if (data.user !== localUser) {
+                                    saveMessageToSilentHistory(data.user, data);
+                                    unreadCounts[data.user] = (unreadCounts[data.user] || 0) + 1;
+                                    localStorage.setItem('p2p_unread_counts', JSON.stringify(unreadCounts));
+                                    renderFollowingList();
+                                    pushSystemNotification(data.user, data.text);
+                                }
+                            }
+                        } else if (roomInTopic === currentSecretRoomId) {
+                            if (data.type === 'react') {
+                                updateReactionBadgeUI(data.id, data.emoji);
+                            } else if (data.type === 'kill') {
+                                const node = document.getElementById(`msg-${data.id}`);
+                                if (node) node.remove();
+                                removeMessageFromHistory(data.id);
+                            } else if (data.type === 'typing' && data.user !== localUser) {
+                                document.getElementById('typingLabel').innerText = data.isTyping ? `@${data.user} está escribiendo...` : '';
+                            }
+                        } else {
+                            if (data.type === 'react') {
+                                updateReactionBadgeBackground(data.id, data.emoji);
+                            } else if (data.type === 'kill') {
+                                removeMessageFromHistory(data.id);
+                            }
                         }
                     }
                 } catch(e) {}
@@ -449,7 +510,6 @@
             if (changed) filterDiscoveryUsers();
         }
 
-        // CONTROL DE SOLICITUDES ENTRANTES (UI)
         function renderPendingRequests() {
             const container = document.getElementById('requestsList');
             const title = document.getElementById('reqsTitle');
@@ -461,7 +521,8 @@
             }
 
             title.style.display = "block";
-            pendingRequests.forEach(peer => {
+            // Sanitización estricta usando Set para la renderización
+            [...new Set(pendingRequests)].forEach(peer => {
                 const item = document.createElement('div');
                 item.className = "user-item";
                 item.style.background = "#141416";
@@ -486,11 +547,15 @@
             
             if (!followingUsers.includes(username)) {
                 followingUsers.push(username);
+                followingUsers = [...new Set(followingUsers)];
                 localStorage.setItem('p2p_following', JSON.stringify(followingUsers));
-            }
-
-            if (mqttClient && mqttClient.connected) {
-                mqttClient.publish(`insta/social/user/${username}/inbox`, JSON.stringify({ type: 'follow_accept', from: localUser }));
+                
+                const sortedCombination = [localUser, username].sort();
+                const roomId = btoa(sortedCombination[0] + "_" + sortedCombination[1]).replace(/=/g, "").substr(0, 15);
+                if (mqttClient && mqttClient.connected) {
+                    mqttClient.subscribe(`insta/social/direct/${roomId}`);
+                    mqttClient.publish(`insta/social/user/${username}/inbox`, JSON.stringify({ type: 'follow_accept', from: localUser }));
+                }
             }
 
             renderPendingRequests();
@@ -510,15 +575,26 @@
             filterDiscoveryUsers();
         }
 
-        // FILTRO DE BÚSQUEDA GLOBAL
+        // FILTRO DE BÚSQUEDA GLOBAL CON PRIVACIDAD INTEGRAL
         function filterDiscoveryUsers() {
             const query = document.getElementById('searchUserField').value.trim().toLowerCase();
             const container = document.getElementById('discoveryList');
             container.innerHTML = "";
 
+            // PRIVACIDAD: Si el cuadro de texto está vacío, ocultar toda traza de usuarios activos
+            if (!query) {
+                container.innerHTML = `<p style="color:var(--text-muted); font-size:0.75rem; padding:15px; text-align:center;">Escribe en el buscador para encontrar usuarios...</p>`;
+                return;
+            }
+
             let count = 0;
+            let renderedNames = new Set(); // Estructura local para interceptar duplicados
+
             for (let peer in discoveredPeers) {
-                if (query && !peer.includes(query)) continue;
+                if (!peer.includes(query)) continue;
+                if (renderedNames.has(peer)) continue; // Evita renderizar elementos duplicados
+                
+                renderedNames.add(peer);
                 count++;
 
                 const isFollowing = followingUsers.includes(peer);
@@ -552,19 +628,23 @@
                 container.appendChild(item);
             }
             if (count === 0) {
-                container.innerHTML = `<p style="color:var(--text-muted); font-size:0.75rem; padding:15px; text-align:center;">No hay usuarios descubiertos.</p>`;
+                container.innerHTML = `<p style="color:var(--text-muted); font-size:0.75rem; padding:15px; text-align:center;">No se encontraron usuarios activos con ese nombre.</p>`;
             }
         }
 
         function processFollowAction(username, isFollowing, isPending) {
             if (isFollowing) {
-                // Dejar de seguir de forma inmediata local
                 followingUsers = followingUsers.filter(u => u !== username);
                 localStorage.setItem('p2p_following', JSON.stringify(followingUsers));
+                
+                const sortedCombination = [localUser, username].sort();
+                const roomId = btoa(sortedCombination[0] + "_" + sortedCombination[1]).replace(/=/g, "").substr(0, 15);
+                if (mqttClient) mqttClient.unsubscribe(`insta/social/direct/${roomId}`);
+                
                 if (activeChatPartner === username) exitChatToWaitingState();
             } else if (!isPending) {
-                // Enviar una nueva solicitud de seguimiento segura al par
                 sentRequests.push(username);
+                sentRequests = [...new Set(sentRequests)];
                 localStorage.setItem('p2p_sent_requests', JSON.stringify(sentRequests));
                 if (mqttClient && mqttClient.connected) {
                     mqttClient.publish(`insta/social/user/${username}/inbox`, JSON.stringify({ type: 'follow_req', from: localUser }));
@@ -578,22 +658,33 @@
             const container = document.getElementById('followingList');
             container.innerHTML = "";
 
-            if (followingUsers.length === 0) {
+            // Limpieza estricta de redundancia en la colección de seguidos
+            const uniqueFollowing = [...new Set(followingUsers)];
+
+            if (uniqueFollowing.length === 0) {
                 container.innerHTML = `<p style="color:var(--text-muted); font-size:0.75rem; padding:15px; text-align:center;">Aún no tienes salas directas activas.</p>`;
                 return;
             }
 
-            followingUsers.forEach(peer => {
+            uniqueFollowing.forEach(peer => {
                 const isCurrentActive = peer === activeChatPartner;
+                const count = unreadCounts[peer] || 0;
+                
+                let bubbleHtml = "";
+                if (count > 0 && !isCurrentActive) {
+                    bubbleHtml = `<span class="unread-badge">${count}</span>`;
+                }
+
                 const item = document.createElement('div');
                 item.className = `user-item ${isCurrentActive ? 'active-chat-item' : ''}`;
                 item.innerHTML = `
                     <div class="user-meta">
                         <div class="avatar-sm" style="background:#1c1c1e;">${peer.charAt(0).toUpperCase()}</div>
-                        <div>
+                        <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
                             <div style="font-weight:600; font-size:0.85rem;">@${peer}</div>
-                            <div style="font-size:0.72rem; color:var(--text-muted);">Chat persistente guardado</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted);">Chat persistente</div>
                         </div>
+                        ${bubbleHtml}
                     </div>
                     <button class="btn-action chat-go" onclick="startPrivateChat('${peer}')">Chat</button>
                 `;
@@ -601,23 +692,18 @@
             });
         }
 
-        // APERTURA DE SALAS E INYECCIÓN HISTÓRICA LOCAL
         function startPrivateChat(partnerUsername) {
-            if (currentSecretRoomId && mqttClient) {
-                mqttClient.unsubscribe(`insta/social/direct/${currentSecretRoomId}`);
-            }
-
             activeChatPartner = partnerUsername;
             
+            unreadCounts[partnerUsername] = 0;
+            localStorage.setItem('p2p_unread_counts', JSON.stringify(unreadCounts));
+
             const sortedCombination = [localUser, partnerUsername].sort();
             currentSecretRoomId = btoa(sortedCombination[0] + "_" + sortedCombination[1]).replace(/=/g, "").substr(0, 15);
-
-            mqttClient.subscribe(`insta/social/direct/${currentSecretRoomId}`);
 
             document.getElementById('chatTargetName').innerText = `@${partnerUsername}`;
             document.getElementById('chatTargetAvatar').innerText = partnerUsername.charAt(0).toUpperCase();
             
-            // Vaciar contenedor e inyectar el historial persistente de este usuario
             const chatBox = document.getElementById('chatBox');
             chatBox.innerHTML = ""; 
             
@@ -635,9 +721,6 @@
         }
 
         function exitChatToWaitingState() {
-            if (mqttClient && currentSecretRoomId) {
-                mqttClient.unsubscribe(`insta/social/direct/${currentSecretRoomId}`);
-            }
             currentSecretRoomId = "";
             activeChatPartner = "";
             
@@ -689,18 +772,20 @@
             mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'typing', user: localUser, isTyping: false }));
         }
 
-        // MOTOR DE RENDERIZADO CON ENSAMBLAJE DE MEMORIA LOCAL
+        function saveMessageToSilentHistory(partner, data) {
+            if (!chatHistories[partner]) chatHistories[partner] = [];
+            if (!chatHistories[partner].some(m => m.id === data.id)) {
+                chatHistories[partner].push(data);
+                localStorage.setItem('p2p_chat_histories', JSON.stringify(chatHistories));
+            }
+        }
+
         function renderMessageBubble(data, shouldScroll = true) {
             if (document.getElementById(`msg-${data.id}`)) return;
 
-            // Almacenar en estructura de historial persistente si es un mensaje de texto nuevo
             const partner = (data.user === localUser) ? activeChatPartner : data.user;
             if (partner && !data.fromHistoryLoad) {
-                if (!chatHistories[partner]) chatHistories[partner] = [];
-                if (!chatHistories[partner].some(m => m.id === data.id)) {
-                    chatHistories[partner].push(data);
-                    localStorage.setItem('p2p_chat_histories', JSON.stringify(chatHistories));
-                }
+                saveMessageToSilentHistory(partner, data);
             }
 
             const chatBox = document.getElementById('chatBox');
@@ -728,7 +813,6 @@
 
             const bubble = wrapper.querySelector(`#bubble-${data.id}`);
 
-            // Double tap para Like rápido
             let lastClickTime = 0;
             bubble.addEventListener('click', () => {
                 const now = Date.now();
@@ -745,7 +829,6 @@
                 lastClickTime = now;
             });
 
-            // Long Press para menú contextual
             let touchTimer;
             const startTouch = () => { touchTimer = setTimeout(() => { openMessageMenu(data.id, data.user, data.text); }, 600); };
             const endTouch = () => clearTimeout(touchTimer);
@@ -755,7 +838,6 @@
             bubble.addEventListener('mousedown', startTouch);
             bubble.addEventListener('mouseup', endTouch);
 
-            // Deslizar para responder
             if (!isOutgoing) {
                 let initialX = 0;
                 wrapper.addEventListener('touchstart', (e) => { initialX = e.touches[0].clientX; }, {passive: true});
@@ -782,7 +864,10 @@
                     wrapper.classList.remove('has-reaction');
                 }
             }
-            // Reflejar la reacción dentro del historial guardado
+            updateReactionBadgeBackground(id, emoji);
+        }
+
+        function updateReactionBadgeBackground(id, emoji) {
             for (let p in chatHistories) {
                 let msg = chatHistories[p].find(m => m.id === id);
                 if (msg) {
@@ -844,7 +929,7 @@
         }
 
         function triggerReplyFromMenu() {
-            if (selectedMsgId) initiateReplyDock(selectedMsgId, selectedMsgText, selectedMsgSender);
+            if (selectedMsgId) initiateReplyDock(selectedMsgText, selectedMsgSender);
             closeMessageMenu();
         }
 
