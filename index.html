@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Netpulse - conectividad- veloz</title>
+    <title>Instagram Direct - Web Split P2P</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         :root {
@@ -20,6 +20,7 @@
             --border-color: #262626;
             --danger: #ed4956;
             --success: #4ecb71;
+            --warning: #f5a623;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
@@ -36,7 +37,6 @@
             overflow: hidden;
         }
 
-        /* Contenedor Principal Adaptable */
         .app-container {
             width: 100vw;
             height: 100vh;
@@ -49,8 +49,6 @@
         }
 
         /* ================= PANELES DE LA INTERFAZ ================= */
-        
-        /* PANEL IZQUIERDO: Perfil y Listas */
         .sidebar-panel {
             width: 350px;
             min-width: 320px;
@@ -58,12 +56,11 @@
             background-color: var(--bg-sidebar);
             border-right: 1px solid var(--border-color);
             display: flex;
-            flex-direction: column;background-clip: text; 
+            flex-direction: column;
             flex-shrink: 0;
             z-index: 10;
         }
 
-        /* PANEL DERECHO: El Chat Activo */
         .chat-panel {
             flex: 1;
             height: 100%;
@@ -74,13 +71,13 @@
             z-index: 5;
         }
 
-        /* ================= RESPONSIVIDAD PARA CELULARES (MÓVIL PRIMERO) ================= */
+        /* ================= RESPONSIVIDAD (MÓVIL PRIMERO) ================= */
         @media (max-width: 767px) {
             .sidebar-panel {
                 width: 100%;
                 min-width: 100%;
                 border-right: none;
-                display: flex; /* Visible por defecto al entrar */
+                display: flex;
             }
 
             .chat-panel {
@@ -88,26 +85,14 @@
                 position: absolute;
                 top: 0;
                 left: 0;
-                display: none; /* Oculto por defecto en móvil si no hay chat */
+                display: none;
             }
 
-            /* CONTROL DE FLUJO MEDIANTE CLASE DINÁMICA (Cuando abres un chat en celular) */
-            .app-container.chat-selected .sidebar-panel {
-                display: none !important;
-            }
-
-            .app-container.chat-selected .chat-panel {
-                display: flex !important;
-            }
-
-            .close-chat-btn {
-                font-size: 1.4rem !important; /* Transforma el texto en una flecha grande */
-                font-weight: bold;
-                color: var(--accent-blue) !important;
-            }
+            .app-container.chat-selected .sidebar-panel { display: none !important; }
+            .app-container.chat-selected .chat-panel { display: flex !important; }
+            .close-chat-btn { font-size: 1.4rem !important; font-weight: bold; color: var(--accent-blue) !important; }
         }
 
-        /* DISEÑO DE ESCRITORIO O TABLETAS GRANDES */
         @media (min-width: 768px) {
             .app-container { 
                 height: 90vh; 
@@ -118,7 +103,7 @@
             }
         }
 
-        /* PANTALLA INICIAL DE AUTENTICACIÓN */
+        /* CONTROL DE ACCESO */
         .auth-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--bg-app); z-index: 2000; display: flex;
@@ -128,9 +113,8 @@
         .auth-logo { font-size: 2.8rem; font-weight: 800; background: var(--accent-gradient); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 15px; font-family: 'Arial Black', sans-serif; }
         .auth-card { background: var(--bg-card); padding: 28px; border-radius: 24px; border: 1px solid var(--border-color); }
         .auth-card input { width: 100%; background: var(--bg-input); border: 1px solid var(--border-color); color: #fff; padding: 14px; border-radius: 12px; font-size: 1rem; outline: none; margin-bottom: 16px; text-align: center; }
-        .auth-card input:focus { border-color: #404040; }
 
-        /* Estructura Interna del Sidebar */
+        /* Estructura Interna */
         .dash-header { padding: 20px 20px 10px 20px; }
         .profile-section { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
         .avatar { width: 50px; height: 50px; border-radius: 50%; background: var(--accent-gradient); display: flex; justify-content: center; align-items: center; font-weight: 700; font-size: 1.3rem; color: #fff; }
@@ -143,25 +127,18 @@
         .section-title { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; padding: 12px 20px 6px 20px; }
         .user-list-scroll { flex: 1; overflow-y: auto; padding: 0 10px; display: flex; flex-direction: column; gap: 2px; -webkit-overflow-scrolling: touch; }
         
-        /* Items de Listas de Usuarios */
         .user-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: transparent; border-radius: 12px; }
         .user-item.active-chat-item { background: #121212; }
-        .user-meta { display: flex; align-items: center; gap: 12px; }
-        .avatar-sm { width: 38px; height: 38px; border-radius: 50%; background: #262626; display: flex; justify-content: center; align-items: center; font-size: 0.9rem; font-weight: 600; color: #fff; }
+        .user-meta { display: flex; align-items: center; gap: 12px; overflow: hidden; text-overflow: ellipsis; }
+        .avatar-sm { width: 38px; height: 38px; border-radius: 50%; background: #262626; display: flex; justify-content: center; align-items: center; font-size: 0.9rem; font-weight: 600; color: #fff; flex-shrink: 0; }
         .online-dot { width: 7px; height: 7px; background: var(--success); border-radius: 50%; margin-top: 4px; }
 
-        /* Botones del Sidebar */
-        .btn-action { background: var(--accent-blue); color: #fff; border: none; padding: 7px 14px; border-radius: 8px; font-weight: 600; font-size: 0.8rem; cursor: pointer; }
-        .btn-action.following { background: var(--bg-bubble-in); color: var(--text-main); }
+        .btn-action { background: var(--accent-blue); color: #fff; border: none; padding: 7px 14px; border-radius: 8px; font-weight: 600; font-size: 0.8rem; cursor: pointer; flex-shrink: 0; }
         .btn-action.chat-go { background: #ffffff; color: #000000; }
 
-        /* Estados del Panel del Chat */
-        .empty-chat-state {
-            width: 100%; height: 100%; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; text-align: center; padding: 30px;
-        }
+        /* Mesa de Chat */
+        .empty-chat-state { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 30px; }
         .empty-icon-wrap { width: 96px; height: 96px; border-radius: 50%; border: 2px solid var(--text-main); display: flex; justify-content: center; align-items: center; margin-bottom: 15px; font-size: 2.5rem; }
-
         .active-chat-state { width: 100%; height: 100%; display: none; flex-direction: column; }
         
         .chat-header { padding: 14px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--bg-app); min-height: 64px; }
@@ -170,7 +147,6 @@
         
         .chat-container { flex: 1; background-color: var(--bg-app); overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
         
-        /* Burbujas Modernas */
         .msg-wrapper { display: flex; flex-direction: column; max-width: 75%; position: relative; animation: popIn 0.18s ease-out; }
         .msg-wrapper.outgoing { align-self: flex-end; }
         .msg-wrapper.incoming { align-self: flex-start; }
@@ -180,7 +156,6 @@
         .incoming .msg-bubble { background: var(--bg-bubble-in); color: var(--text-main); border-bottom-left-radius: 5px; }
         
         .reply-quote-inside { background: rgba(0, 0, 0, 0.15); padding: 6px 10px; border-radius: 12px; border-left: 2.5px solid rgba(255, 255, 255, 0.7); font-size: 0.78rem; margin-bottom: 6px; color: rgba(255,255,255,0.85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
         .reaction-badge { position: absolute; bottom: -8px; right: 12px; background: #1e1e1e; border: 1.5px solid #000; border-radius: 12px; padding: 1px 6px; font-size: 0.75rem; display: none; z-index: 2; animation: elasticPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         .msg-wrapper.has-reaction .reaction-badge { display: block; }
 
@@ -193,7 +168,7 @@
         .send-btn { background: transparent; border: none; color: var(--accent-blue); font-weight: 700; font-size: 0.95rem; cursor: pointer; padding-left: 8px; display: none; }
         .typing-status-label { font-size: 0.75rem; color: var(--text-muted); padding-left: 8px; min-height: 14px; }
 
-        /* MENÚ CONTEXTUAL MÓVIL (Action Sheet) */
+        /* Action Sheet Contextual */
         .action-sheet-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 3000; display: none; justify-content: center; align-items: flex-end; backdrop-filter: blur(2px); }
         .action-sheet { background: #1c1c1e; width: 100%; max-width: 440px; border-top-left-radius: 20px; border-top-right-radius: 20px; padding: 16px 0 30px 0; animation: slideUp 0.2s ease-out; margin: 0 auto; }
         .emoji-reaction-row { display: flex; justify-content: space-around; padding: 0 16px 16px 16px; border-bottom: 1px solid #2c2c2e; margin-bottom: 8px; }
@@ -236,6 +211,9 @@
                 </div>
             </div>
             
+            <div class="section-title" id="reqsTitle" style="display:none; color: var(--warning);">Solicitudes de Seguimiento</div>
+            <div class="user-list-scroll" id="requestsList" style="flex: initial; max-height: 160px;"></div>
+
             <div class="section-title">Buscar nuevos usuarios</div>
             <div class="user-list-scroll" id="discoveryList">
                 <p style="color: var(--text-muted); font-size: 0.8rem; padding: 15px; text-align: center;">Escaneando trazas de red...</p>
@@ -243,16 +221,15 @@
 
             <div class="section-title" style="margin-top: 10px;">Mensajes Directos (Seguidos)</div>
             <div class="user-list-scroll" id="followingList">
-                <p style="color: var(--text-muted); font-size: 0.8rem; padding: 15px; text-align: center;">Aún no sigues a nadie.</p>
+                <p style="color: var(--text-muted); font-size: 0.8rem; padding: 15px; text-align: center;">Aún no tienes salas directas activas.</p>
             </div>
         </div>
 
         <div class="chat-panel">
-            
             <div class="empty-chat-state" id="panelEmptyState">
                 <div class="empty-icon-wrap">✈️</div>
                 <h2 style="font-weight: 400; font-size: 1.3rem; margin-bottom: 6px;">Tus Mensajes</h2>
-                <p style="color: var(--text-muted); font-size: 0.88rem; max-width: 260px; line-height: 1.4;">Selecciona una de tus salas directas a la izquierda o sigue a un usuario para empezar a mensajear.</p>
+                <p style="color: var(--text-muted); font-size: 0.88rem; max-width: 260px; line-height: 1.4;">Envía fotos y mensajes privados a un amigo tras conectar de forma directa.</p>
             </div>
 
             <div class="active-chat-state" id="panelActiveChatState">
@@ -285,7 +262,6 @@
                     </div>
                 </div>
             </div>
-
         </div>
 
     </div>
@@ -315,6 +291,11 @@
         
         let discoveredPeers = {}; 
         let followingUsers = JSON.parse(localStorage.getItem('p2p_following')) || []; 
+        
+        // PERSISTENCIA DE SOLICITUDES E HISTORIALES
+        let pendingRequests = JSON.parse(localStorage.getItem('p2p_pending_requests')) || []; 
+        let sentRequests = JSON.parse(localStorage.getItem('p2p_sent_requests')) || []; 
+        let chatHistories = JSON.parse(localStorage.getItem('p2p_chat_histories')) || {}; 
 
         let activeChatPartner = "";
         let currentSecretRoomId = "";
@@ -336,7 +317,6 @@
                 
                 document.getElementById('myProfileName').innerText = `@${localUser}`;
                 document.getElementById('myAvatarLetter').innerText = localUser.charAt(0).toUpperCase();
-                
                 document.getElementById('authScreenZone').style.display = "none";
                 initializeMqttNetwork();
             }
@@ -345,9 +325,7 @@
         window.addEventListener('beforeunload', () => {
             if (mqttClient && mqttClient.connected && localUser) {
                 mqttClient.publish('insta/social/global/discovery', JSON.stringify({ 
-                    username: localUser, 
-                    uid: localUid, 
-                    status: 'offline' 
+                    username: localUser, uid: localUid, status: 'offline' 
                 }));
             }
         });
@@ -357,13 +335,11 @@
             if (input.length < 3) return alert("Usa al menos 3 caracteres alfanuméricos.");
             
             localUser = input;
-            
             localStorage.setItem('p2p_local_user', localUser);
             localStorage.setItem('p2p_local_uid', localUid);
 
             document.getElementById('myProfileName').innerText = `@${localUser}`;
             document.getElementById('myAvatarLetter').innerText = localUser.charAt(0).toUpperCase();
-            
             document.getElementById('authScreenZone').style.display = "none";
             initializeMqttNetwork();
         }
@@ -376,13 +352,16 @@
                 statusLabel.innerText = "● En línea";
                 statusLabel.style.color = "var(--success)";
 
+                // Canales globales y canal privado de control entrante
                 mqttClient.subscribe('insta/social/global/discovery');
+                mqttClient.subscribe(`insta/social/user/${localUser}/inbox`);
                 
                 announcePresence();
                 setInterval(announcePresence, 4000);
                 setInterval(purgeOfflinePeers, 8000);
                 
                 renderFollowingList();
+                renderPendingRequests();
             });
 
             const handleDisconnectUI = () => {
@@ -400,6 +379,7 @@
                 try {
                     const data = JSON.parse(raw.toString());
 
+                    // 1. Red Global de Descubrimiento
                     if (topic === 'insta/social/global/discovery') {
                         if (data.username !== localUser) {
                             if (data.status === 'offline') {
@@ -410,6 +390,30 @@
                             filterDiscoveryUsers();
                         }
                     } 
+                    // 2. Buzón de Solicitudes Privadas
+                    else if (topic === `insta/social/user/${localUser}/inbox`) {
+                        if (data.type === 'follow_req') {
+                            if (!pendingRequests.includes(data.from) && !followingUsers.includes(data.from)) {
+                                pendingRequests.push(data.from);
+                                localStorage.setItem('p2p_pending_requests', JSON.stringify(pendingRequests));
+                                renderPendingRequests();
+                            }
+                        } else if (data.type === 'follow_accept') {
+                            sentRequests = sentRequests.filter(u => u !== data.from);
+                            localStorage.setItem('p2p_sent_requests', JSON.stringify(sentRequests));
+                            if (!followingUsers.includes(data.from)) {
+                                followingUsers.push(data.from);
+                                localStorage.setItem('p2p_following', JSON.stringify(followingUsers));
+                            }
+                            filterDiscoveryUsers();
+                            renderFollowingList();
+                        } else if (data.type === 'follow_decline') {
+                            sentRequests = sentRequests.filter(u => u !== data.from);
+                            localStorage.setItem('p2p_sent_requests', JSON.stringify(sentRequests));
+                            filterDiscoveryUsers();
+                        }
+                    }
+                    // 3. Sala de Conversación Activa
                     else if (topic === `insta/social/direct/${currentSecretRoomId}`) {
                         if (data.type === 'msg') {
                             renderMessageBubble(data);
@@ -418,6 +422,7 @@
                         } else if (data.type === 'kill') {
                             const node = document.getElementById(`msg-${data.id}`);
                             if (node) node.remove();
+                            removeMessageFromHistory(data.id);
                         } else if (data.type === 'typing' && data.user !== localUser) {
                             document.getElementById('typingLabel').innerText = data.isTyping ? `@${data.user} está escribiendo...` : '';
                         }
@@ -444,6 +449,68 @@
             if (changed) filterDiscoveryUsers();
         }
 
+        // CONTROL DE SOLICITUDES ENTRANTES (UI)
+        function renderPendingRequests() {
+            const container = document.getElementById('requestsList');
+            const title = document.getElementById('reqsTitle');
+            container.innerHTML = "";
+
+            if (pendingRequests.length === 0) {
+                title.style.display = "none";
+                return;
+            }
+
+            title.style.display = "block";
+            pendingRequests.forEach(peer => {
+                const item = document.createElement('div');
+                item.className = "user-item";
+                item.style.background = "#141416";
+                item.style.marginBottom = "4px";
+                item.innerHTML = `
+                    <div class="user-meta">
+                        <div class="avatar-sm" style="background: var(--warning); color:#000;">${peer.charAt(0).toUpperCase()}</div>
+                        <div style="font-weight:600; font-size:0.85rem; overflow:hidden;">@${peer}</div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn-action" style="background:var(--success); padding:6px 12px;" onclick="acceptFollowRequest('${peer}')">✓</button>
+                        <button class="btn-action" style="background:var(--danger); padding:6px 12px;" onclick="declineFollowRequest('${peer}')">✕</button>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function acceptFollowRequest(username) {
+            pendingRequests = pendingRequests.filter(u => u !== username);
+            localStorage.setItem('p2p_pending_requests', JSON.stringify(pendingRequests));
+            
+            if (!followingUsers.includes(username)) {
+                followingUsers.push(username);
+                localStorage.setItem('p2p_following', JSON.stringify(followingUsers));
+            }
+
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.publish(`insta/social/user/${username}/inbox`, JSON.stringify({ type: 'follow_accept', from: localUser }));
+            }
+
+            renderPendingRequests();
+            filterDiscoveryUsers();
+            renderFollowingList();
+        }
+
+        function declineFollowRequest(username) {
+            pendingRequests = pendingRequests.filter(u => u !== username);
+            localStorage.setItem('p2p_pending_requests', JSON.stringify(pendingRequests));
+
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.publish(`insta/social/user/${username}/inbox`, JSON.stringify({ type: 'follow_decline', from: localUser }));
+            }
+
+            renderPendingRequests();
+            filterDiscoveryUsers();
+        }
+
+        // FILTRO DE BÚSQUEDA GLOBAL
         function filterDiscoveryUsers() {
             const query = document.getElementById('searchUserField').value.trim().toLowerCase();
             const container = document.getElementById('discoveryList');
@@ -455,6 +522,19 @@
                 count++;
 
                 const isFollowing = followingUsers.includes(peer);
+                const isPending = sentRequests.includes(peer);
+                
+                let btnText = "Seguir";
+                let btnStyle = "";
+                
+                if (isFollowing) {
+                    btnText = "Siguiendo";
+                    btnStyle = "background: var(--bg-bubble-in); color: var(--text-main);";
+                } else if (isPending) {
+                    btnText = "Pendiente";
+                    btnStyle = "background: #2c2c2e; color: #8e8e93; cursor: not-allowed;";
+                }
+
                 const item = document.createElement('div');
                 item.className = "user-item";
                 item.innerHTML = `
@@ -465,8 +545,8 @@
                             <div class="online-dot"></div>
                         </div>
                     </div>
-                    <button class="btn-action ${isFollowing ? 'following' : ''}" onclick="toggleFollowUser('${peer}')">
-                        ${isFollowing ? 'Siguiendo' : 'Seguir'}
+                    <button class="btn-action" style="${btnStyle}" onclick="processFollowAction('${peer}', ${isFollowing}, ${isPending})">
+                        ${btnText}
                     </button>
                 `;
                 container.appendChild(item);
@@ -476,12 +556,30 @@
             }
         }
 
+        function processFollowAction(username, isFollowing, isPending) {
+            if (isFollowing) {
+                // Dejar de seguir de forma inmediata local
+                followingUsers = followingUsers.filter(u => u !== username);
+                localStorage.setItem('p2p_following', JSON.stringify(followingUsers));
+                if (activeChatPartner === username) exitChatToWaitingState();
+            } else if (!isPending) {
+                // Enviar una nueva solicitud de seguimiento segura al par
+                sentRequests.push(username);
+                localStorage.setItem('p2p_sent_requests', JSON.stringify(sentRequests));
+                if (mqttClient && mqttClient.connected) {
+                    mqttClient.publish(`insta/social/user/${username}/inbox`, JSON.stringify({ type: 'follow_req', from: localUser }));
+                }
+            }
+            filterDiscoveryUsers();
+            renderFollowingList();
+        }
+
         function renderFollowingList() {
             const container = document.getElementById('followingList');
             container.innerHTML = "";
 
             if (followingUsers.length === 0) {
-                container.innerHTML = `<p style="color:var(--text-muted); font-size:0.75rem; padding:15px; text-align:center;">No sigues a nadie aún.</p>`;
+                container.innerHTML = `<p style="color:var(--text-muted); font-size:0.75rem; padding:15px; text-align:center;">Aún no tienes salas directas activas.</p>`;
                 return;
             }
 
@@ -494,7 +592,7 @@
                         <div class="avatar-sm" style="background:#1c1c1e;">${peer.charAt(0).toUpperCase()}</div>
                         <div>
                             <div style="font-weight:600; font-size:0.85rem;">@${peer}</div>
-                            <div style="font-size:0.72rem; color:var(--text-muted);">Haz clic para abrir chat</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted);">Chat persistente guardado</div>
                         </div>
                     </div>
                     <button class="btn-action chat-go" onclick="startPrivateChat('${peer}')">Chat</button>
@@ -503,18 +601,7 @@
             });
         }
 
-        function toggleFollowUser(username) {
-            if (followingUsers.includes(username)) {
-                followingUsers = followingUsers.filter(u => u !== username);
-                if (activeChatPartner === username) exitChatToWaitingState();
-            } else {
-                followingUsers.push(username);
-            }
-            localStorage.setItem('p2p_following', JSON.stringify(followingUsers));
-            filterDiscoveryUsers();
-            renderFollowingList();
-        }
-
+        // APERTURA DE SALAS E INYECCIÓN HISTÓRICA LOCAL
         function startPrivateChat(partnerUsername) {
             if (currentSecretRoomId && mqttClient) {
                 mqttClient.unsubscribe(`insta/social/direct/${currentSecretRoomId}`);
@@ -529,19 +616,22 @@
 
             document.getElementById('chatTargetName').innerText = `@${partnerUsername}`;
             document.getElementById('chatTargetAvatar').innerText = partnerUsername.charAt(0).toUpperCase();
-            document.getElementById('chatBox').innerHTML = ""; 
             
+            // Vaciar contenedor e inyectar el historial persistente de este usuario
+            const chatBox = document.getElementById('chatBox');
+            chatBox.innerHTML = ""; 
+            
+            const history = chatHistories[partnerUsername] || [];
+            history.forEach(msgData => {
+                renderMessageBubble(msgData, false); 
+            });
+
             document.getElementById('panelEmptyState').style.display = "none";
             document.getElementById('panelActiveChatState').style.display = "flex";
-            
-            // DISPARADOR MÓVIL: Añadir clase de vista activa para celulares
             document.getElementById('mainAppContainer').classList.add('chat-selected');
             
             renderFollowingList(); 
-            setTimeout(() => {
-                const box = document.getElementById('chatBox');
-                box.scrollTop = box.scrollHeight;
-            }, 50);
+            setTimeout(() => { chatBox.scrollTop = chatBox.scrollHeight; }, 60);
         }
 
         function exitChatToWaitingState() {
@@ -553,8 +643,6 @@
             
             document.getElementById('panelActiveChatState').style.display = "none";
             document.getElementById('panelEmptyState').style.display = "flex";
-            
-            // DISPARADOR MÓVIL: Remover clase para volver a la lista de usuarios
             document.getElementById('mainAppContainer').classList.remove('chat-selected');
             
             renderFollowingList();
@@ -601,14 +689,28 @@
             mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'typing', user: localUser, isTyping: false }));
         }
 
-        function renderMessageBubble(data) {
+        // MOTOR DE RENDERIZADO CON ENSAMBLAJE DE MEMORIA LOCAL
+        function renderMessageBubble(data, shouldScroll = true) {
             if (document.getElementById(`msg-${data.id}`)) return;
+
+            // Almacenar en estructura de historial persistente si es un mensaje de texto nuevo
+            const partner = (data.user === localUser) ? activeChatPartner : data.user;
+            if (partner && !data.fromHistoryLoad) {
+                if (!chatHistories[partner]) chatHistories[partner] = [];
+                if (!chatHistories[partner].some(m => m.id === data.id)) {
+                    chatHistories[partner].push(data);
+                    localStorage.setItem('p2p_chat_histories', JSON.stringify(chatHistories));
+                }
+            }
 
             const chatBox = document.getElementById('chatBox');
             const wrapper = document.createElement('div');
             const isOutgoing = data.user === localUser;
             
-            wrapper.className = `msg-wrapper ${isOutgoing ? 'outgoing' : 'incoming'}`;
+            const hasReactionClass = data.reaction ? 'has-reaction' : '';
+            const initialEmoji = data.reaction || '❤️';
+
+            wrapper.className = `msg-wrapper ${isOutgoing ? 'outgoing' : 'incoming'} ${hasReactionClass}`;
             wrapper.id = `msg-${data.id}`;
 
             let quoteHtml = data.replyId ? `<div class="reply-quote-inside"><b>@${data.replyUser}</b>: ${data.replyText}</div>` : "";
@@ -617,16 +719,16 @@
                 <div class="msg-bubble" id="bubble-${data.id}">
                     ${quoteHtml}
                     <span class="text-data">${data.text}</span>
-                    <div class="reaction-badge" id="react-${data.id}">❤️</div>
+                    <div class="reaction-badge" id="react-${data.id}">${initialEmoji}</div>
                 </div>
             `;
 
             chatBox.appendChild(wrapper);
-            chatBox.scrollTop = chatBox.scrollHeight;
+            if (shouldScroll) chatBox.scrollTop = chatBox.scrollHeight;
 
             const bubble = wrapper.querySelector(`#bubble-${data.id}`);
 
-            // Doble toque (Double tap) para reaccionar rápido con Corazón
+            // Double tap para Like rápido
             let lastClickTime = 0;
             bubble.addEventListener('click', () => {
                 const now = Date.now();
@@ -643,13 +745,9 @@
                 lastClickTime = now;
             });
 
-            // Presión prolongada (Long press) para Menú Contextual Completo
+            // Long Press para menú contextual
             let touchTimer;
-            const startTouch = () => {
-                touchTimer = setTimeout(() => {
-                    openMessageMenu(data.id, data.user, data.text);
-                }, 600);
-            };
+            const startTouch = () => { touchTimer = setTimeout(() => { openMessageMenu(data.id, data.user, data.text); }, 600); };
             const endTouch = () => clearTimeout(touchTimer);
 
             bubble.addEventListener('touchstart', startTouch);
@@ -657,7 +755,7 @@
             bubble.addEventListener('mousedown', startTouch);
             bubble.addEventListener('mouseup', endTouch);
 
-            // Gesto deslizar a la derecha para responder (Solo en mensajes entrantes)
+            // Deslizar para responder
             if (!isOutgoing) {
                 let initialX = 0;
                 wrapper.addEventListener('touchstart', (e) => { initialX = e.touches[0].clientX; }, {passive: true});
@@ -684,6 +782,23 @@
                     wrapper.classList.remove('has-reaction');
                 }
             }
+            // Reflejar la reacción dentro del historial guardado
+            for (let p in chatHistories) {
+                let msg = chatHistories[p].find(m => m.id === id);
+                if (msg) {
+                    if (emoji) msg.reaction = emoji;
+                    else delete msg.reaction;
+                    localStorage.setItem('p2p_chat_histories', JSON.stringify(chatHistories));
+                    break;
+                }
+            }
+        }
+
+        function removeMessageFromHistory(id) {
+            for (let p in chatHistories) {
+                chatHistories[p] = chatHistories[p].filter(m => m.id !== id);
+            }
+            localStorage.setItem('p2p_chat_histories', JSON.stringify(chatHistories));
         }
 
         function initiateReplyDock(id, text, user) {
@@ -744,12 +859,14 @@
             if (scope === 'me') {
                 const node = document.getElementById(`msg-${selectedMsgId}`);
                 if (node) node.remove();
+                removeMessageFromHistory(selectedMsgId);
             } else if (scope === 'everyone' && selectedMsgSender === localUser) {
                 if (mqttClient) {
                     mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'kill', id: selectedMsgId }));
                 }
                 const node = document.getElementById(`msg-${selectedMsgId}`);
                 if (node) node.remove();
+                removeMessageFromHistory(selectedMsgId);
             }
             closeMessageMenu();
         }
