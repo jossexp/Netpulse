@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Netpulse - conectividad- veloz</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root {
+            --bg-app: #000000;
+            --bg-sidebar: #000000;
+            --bg-chat-blank: #000000;
+            --bg-card: #121212;
+            --bg-bubble-in: #262626;
+            --bg-input: #1c1c1e;
+            --text-main: #f5f5f5;
+            --text-muted: #737373;
+            --accent-gradient: linear-gradient(45deg, #3897f0, #7000ff, #c32aa3);
+            --accent-blue: #0095f6;
+            --border-color: #262626;
+            --danger: #ed4956;
+            --success: #4ecb71;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+
+        body {
+            background-color: #0a0a0a;
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            min-height: 100dvh;
+            overflow: hidden;
+        }
+
+        /* Contenedor Principal Adaptable */
+        .app-container {
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            max-width: 1200px;
+            background-color: var(--bg-app);
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* ================= PANELES DE LA INTERFAZ ================= */
+        
+        /* PANEL IZQUIERDO: Perfil y Listas */
+        .sidebar-panel {
+            width: 350px;
+            min-width: 320px;
+            height: 100%;
+            background-color: var(--bg-sidebar);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;background-clip: text; 
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        /* PANEL DERECHO: El Chat Activo */
+        .chat-panel {
+            flex: 1;
+            height: 100%;
+            background-color: var(--bg-chat-blank);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 5;
+        }
+
+        /* ================= RESPONSIVIDAD PARA CELULARES (MÓVIL PRIMERO) ================= */
+        @media (max-width: 767px) {
+            .sidebar-panel {
+                width: 100%;
+                min-width: 100%;
+                border-right: none;
+                display: flex; /* Visible por defecto al entrar */
+            }
+
+            .chat-panel {
+                width: 100%;
+                position: absolute;
+                top: 0;
+                left: 0;
+                display: none; /* Oculto por defecto en móvil si no hay chat */
+            }
+
+            /* CONTROL DE FLUJO MEDIANTE CLASE DINÁMICA (Cuando abres un chat en celular) */
+            .app-container.chat-selected .sidebar-panel {
+                display: none !important;
+            }
+
+            .app-container.chat-selected .chat-panel {
+                display: flex !important;
+            }
+
+            .close-chat-btn {
+                font-size: 1.4rem !important; /* Transforma el texto en una flecha grande */
+                font-weight: bold;
+                color: var(--accent-blue) !important;
+            }
+        }
+
+        /* DISEÑO DE ESCRITORIO O TABLETAS GRANDES */
+        @media (min-width: 768px) {
+            .app-container { 
+                height: 90vh; 
+                height: 90dvh;
+                border-radius: 16px; 
+                border: 1px solid #1f1f1f; 
+                box-shadow: 0 12px 40px rgba(0,0,0,0.8);
+            }
+        }
+
+        /* PANTALLA INICIAL DE AUTENTICACIÓN */
+        .auth-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-app); z-index: 2000; display: flex;
+            justify-content: center; align-items: center; padding: 20px;
+        }
+        .auth-screen { text-align: center; max-width: 350px; width: 100%; }
+        .auth-logo { font-size: 2.8rem; font-weight: 800; background: var(--accent-gradient); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 15px; font-family: 'Arial Black', sans-serif; }
+        .auth-card { background: var(--bg-card); padding: 28px; border-radius: 24px; border: 1px solid var(--border-color); }
+        .auth-card input { width: 100%; background: var(--bg-input); border: 1px solid var(--border-color); color: #fff; padding: 14px; border-radius: 12px; font-size: 1rem; outline: none; margin-bottom: 16px; text-align: center; }
+        .auth-card input:focus { border-color: #404040; }
+
+        /* Estructura Interna del Sidebar */
+        .dash-header { padding: 20px 20px 10px 20px; }
+        .profile-section { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+        .avatar { width: 50px; height: 50px; border-radius: 50%; background: var(--accent-gradient); display: flex; justify-content: center; align-items: center; font-weight: 700; font-size: 1.3rem; color: #fff; }
+        .profile-info h2 { font-size: 1.1rem; font-weight: 700; }
+        .profile-info p { font-size: 0.8rem; color: var(--success); display: flex; align-items: center; gap: 5px; font-weight: 500; }
+        
+        .search-box { background: var(--bg-input); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; margin-bottom: 10px; }
+        .search-box input { background: transparent; border: none; color: #fff; width: 100%; outline: none; font-size: 0.88rem; }
+
+        .section-title { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; padding: 12px 20px 6px 20px; }
+        .user-list-scroll { flex: 1; overflow-y: auto; padding: 0 10px; display: flex; flex-direction: column; gap: 2px; -webkit-overflow-scrolling: touch; }
+        
+        /* Items de Listas de Usuarios */
+        .user-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: transparent; border-radius: 12px; }
+        .user-item.active-chat-item { background: #121212; }
+        .user-meta { display: flex; align-items: center; gap: 12px; }
+        .avatar-sm { width: 38px; height: 38px; border-radius: 50%; background: #262626; display: flex; justify-content: center; align-items: center; font-size: 0.9rem; font-weight: 600; color: #fff; }
+        .online-dot { width: 7px; height: 7px; background: var(--success); border-radius: 50%; margin-top: 4px; }
+
+        /* Botones del Sidebar */
+        .btn-action { background: var(--accent-blue); color: #fff; border: none; padding: 7px 14px; border-radius: 8px; font-weight: 600; font-size: 0.8rem; cursor: pointer; }
+        .btn-action.following { background: var(--bg-bubble-in); color: var(--text-main); }
+        .btn-action.chat-go { background: #ffffff; color: #000000; }
+
+        /* Estados del Panel del Chat */
+        .empty-chat-state {
+            width: 100%; height: 100%; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; text-align: center; padding: 30px;
+        }
+        .empty-icon-wrap { width: 96px; height: 96px; border-radius: 50%; border: 2px solid var(--text-main); display: flex; justify-content: center; align-items: center; margin-bottom: 15px; font-size: 2.5rem; }
+
+        .active-chat-state { width: 100%; height: 100%; display: none; flex-direction: column; }
+        
+        .chat-header { padding: 14px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--bg-app); min-height: 64px; }
+        .chat-header-left { display: flex; align-items: center; gap: 14px; }
+        .close-chat-btn { background: transparent; border: none; color: var(--text-muted); font-size: 0.85rem; cursor: pointer; font-weight: 600; padding: 4px 8px; }
+        
+        .chat-container { flex: 1; background-color: var(--bg-app); overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+        
+        /* Burbujas Modernas */
+        .msg-wrapper { display: flex; flex-direction: column; max-width: 75%; position: relative; animation: popIn 0.18s ease-out; }
+        .msg-wrapper.outgoing { align-self: flex-end; }
+        .msg-wrapper.incoming { align-self: flex-start; }
+        
+        .msg-bubble { padding: 11px 16px; border-radius: 22px; font-size: 0.95rem; line-height: 1.4; position: relative; word-wrap: break-word; user-select: text; }
+        .outgoing .msg-bubble { background: var(--accent-gradient); color: #fff; border-bottom-right-radius: 5px; }
+        .incoming .msg-bubble { background: var(--bg-bubble-in); color: var(--text-main); border-bottom-left-radius: 5px; }
+        
+        .reply-quote-inside { background: rgba(0, 0, 0, 0.15); padding: 6px 10px; border-radius: 12px; border-left: 2.5px solid rgba(255, 255, 255, 0.7); font-size: 0.78rem; margin-bottom: 6px; color: rgba(255,255,255,0.85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .reaction-badge { position: absolute; bottom: -8px; right: 12px; background: #1e1e1e; border: 1.5px solid #000; border-radius: 12px; padding: 1px 6px; font-size: 0.75rem; display: none; z-index: 2; animation: elasticPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .msg-wrapper.has-reaction .reaction-badge { display: block; }
+
+        .reply-preview-dock { background: #0a0a0a; padding: 12px 20px; border-top: 1px solid var(--border-color); display: none; justify-content: space-between; align-items: center; }
+        .reply-preview-content { border-left: 2px solid var(--accent-blue); padding-left: 10px; font-size: 0.82rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .input-area { background: var(--bg-app); padding: 12px 16px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 4px; }
+        .input-wrapper { flex: 1; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 24px; padding: 2px 16px; display: flex; align-items: center; min-height: 44px; }
+        .input-wrapper input { flex: 1; background: transparent; border: none; color: #fff; outline: none; font-size: 0.95rem; padding: 10px 0; user-select: text; }
+        .send-btn { background: transparent; border: none; color: var(--accent-blue); font-weight: 700; font-size: 0.95rem; cursor: pointer; padding-left: 8px; display: none; }
+        .typing-status-label { font-size: 0.75rem; color: var(--text-muted); padding-left: 8px; min-height: 14px; }
+
+        /* MENÚ CONTEXTUAL MÓVIL (Action Sheet) */
+        .action-sheet-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 3000; display: none; justify-content: center; align-items: flex-end; backdrop-filter: blur(2px); }
+        .action-sheet { background: #1c1c1e; width: 100%; max-width: 440px; border-top-left-radius: 20px; border-top-right-radius: 20px; padding: 16px 0 30px 0; animation: slideUp 0.2s ease-out; margin: 0 auto; }
+        .emoji-reaction-row { display: flex; justify-content: space-around; padding: 0 16px 16px 16px; border-bottom: 1px solid #2c2c2e; margin-bottom: 8px; }
+        .emoji-btn { font-size: 1.8rem; background: transparent; border: none; cursor: pointer; transition: transform 0.2s; }
+        .sheet-option { width: 100%; padding: 14px; background: transparent; border: none; color: #fff; text-align: center; font-size: 0.95rem; font-weight: 500; cursor: pointer; }
+        .sheet-option.destructive { color: var(--danger); font-weight: 600; }
+        .sheet-option.cancel { color: var(--text-muted); }
+
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes popIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes elasticPop { 0% { transform: scale(0); } 70% { transform: scale(1.2); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+    <div class="app-container" id="mainAppContainer">
+        
+        <div class="auth-overlay" id="authScreenZone">
+            <div class="auth-screen">
+                <div class="auth-logo">Instagram</div>
+                <p style="color: var(--text-muted); margin-bottom: 24px; font-size: 0.92rem;">Crea tu perfil dinámico para acceder a la mensajería P2P.</p>
+                <div class="auth-card">
+                    <input type="text" id="usernameInput" placeholder="Nombre de usuario (ej: yuta09)" autocomplete="off">
+                    <button class="btn-action" style="width: 100%; padding: 14px; font-size: 0.95rem;" onclick="registerUserProfile()">Entrar al Panel</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-panel">
+            <div class="dash-header">
+                <div class="profile-section">
+                    <div class="avatar" id="myAvatarLetter">?</div>
+                    <div class="profile-info">
+                        <h2 id="myProfileName">@usuario</h2>
+                        <p id="myStatusLabel">● En línea</p>
+                    </div>
+                </div>
+                <div class="search-box">
+                    <input type="text" id="searchUserField" placeholder="Buscar usuarios globales en línea..." oninput="filterDiscoveryUsers()">
+                </div>
+            </div>
+            
+            <div class="section-title">Buscar nuevos usuarios</div>
+            <div class="user-list-scroll" id="discoveryList">
+                <p style="color: var(--text-muted); font-size: 0.8rem; padding: 15px; text-align: center;">Escaneando trazas de red...</p>
+            </div>
+
+            <div class="section-title" style="margin-top: 10px;">Mensajes Directos (Seguidos)</div>
+            <div class="user-list-scroll" id="followingList">
+                <p style="color: var(--text-muted); font-size: 0.8rem; padding: 15px; text-align: center;">Aún no sigues a nadie.</p>
+            </div>
+        </div>
+
+        <div class="chat-panel">
+            
+            <div class="empty-chat-state" id="panelEmptyState">
+                <div class="empty-icon-wrap">✈️</div>
+                <h2 style="font-weight: 400; font-size: 1.3rem; margin-bottom: 6px;">Tus Mensajes</h2>
+                <p style="color: var(--text-muted); font-size: 0.88rem; max-width: 260px; line-height: 1.4;">Selecciona una de tus salas directas a la izquierda o sigue a un usuario para empezar a mensajear.</p>
+            </div>
+
+            <div class="active-chat-state" id="panelActiveChatState">
+                <div class="chat-header">
+                    <div class="chat-header-left">
+                        <button class="close-chat-btn" onclick="exitChatToWaitingState()" style="margin-right: 8px;">←</button>
+                        <div class="avatar-sm" id="chatTargetAvatar" style="background: var(--accent-gradient);">?</div>
+                        <div>
+                            <h3 id="chatTargetName" style="font-size: 0.95rem; font-weight: 700;">@Target</h3>
+                            <div style="font-size: 0.72rem; color: var(--success);">Directo Privado Seguro</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chat-container" id="chatBox"></div>
+
+                <div class="reply-preview-dock" id="replyDock">
+                    <div class="reply-preview-content">
+                        <div style="font-weight: 600; color: #fff; font-size: 0.78rem;" id="replyTargetUser">Respuesta</div>
+                        <div id="replyTargetText">Texto...</div>
+                    </div>
+                    <span style="cursor: pointer; color: var(--text-muted); font-size: 1.1rem;" onclick="cancelReplyDock()">✕</span>
+                </div>
+
+                <div class="input-area">
+                    <div class="typing-status-label" id="typingLabel"></div>
+                    <div class="input-wrapper">
+                        <input type="text" id="messageInput" placeholder="Envía un mensaje plano..." oninput="toggleSendBtn(this); broadcastLocalTyping()">
+                        <button class="send-btn" id="btnSend" onclick="submitMessage()">Enviar</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="action-sheet-overlay" id="messageMenuOverlay" onclick="closeMessageMenu()">
+        <div class="action-sheet" onclick="event.stopPropagation()">
+            <div class="emoji-reaction-row">
+                <button class="emoji-btn" onclick="applyEmojiReaction('❤️')">❤️</button>
+                <button class="emoji-btn" onclick="applyEmojiReaction('😂')">😂</button>
+                <button class="emoji-btn" onclick="applyEmojiReaction('😮')">😮</button>
+                <button class="emoji-btn" onclick="applyEmojiReaction('😢')">😢</button>
+                <button class="emoji-btn" onclick="applyEmojiReaction('👍')">👍</button>
+                <button class="emoji-btn" onclick="applyEmojiReaction('🔥')">🔥</button>
+            </div>
+            <button class="sheet-option" id="btnMenuReply" onclick="triggerReplyFromMenu()">Responder</button>
+            <button class="sheet-option" onclick="copyMessageText()">Copiar texto</button>
+            <button class="sheet-option destructive" id="btnUnsendBtn" onclick="deleteMessageFlow('everyone')">Anular envío (Para todos)</button>
+            <button class="sheet-option destructive" onclick="deleteMessageFlow('me')">Eliminar para mí</button>
+            <button class="sheet-option cancel" onclick="closeMessageMenu()">Cancelar</button>
+        </div>
+    </div>
+
+    <script>
+        let mqttClient = null;
+        let localUser = "";
+        let localUid = "u_" + Math.random().toString(36).substr(2, 9);
+        
+        let discoveredPeers = {}; 
+        let followingUsers = JSON.parse(localStorage.getItem('p2p_following')) || []; 
+
+        let activeChatPartner = "";
+        let currentSecretRoomId = "";
+        
+        let selectedMsgId = null;
+        let selectedMsgSender = null;
+        let selectedMsgText = null;
+        let activeReplyId = null;
+        let isTypingToken = false;
+        let typingTimeout = null;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedUser = localStorage.getItem('p2p_local_user');
+            const savedUid = localStorage.getItem('p2p_local_uid');
+            
+            if (savedUser) {
+                localUser = savedUser;
+                localUid = savedUid ? savedUid : "u_" + Math.random().toString(36).substr(2, 9);
+                
+                document.getElementById('myProfileName').innerText = `@${localUser}`;
+                document.getElementById('myAvatarLetter').innerText = localUser.charAt(0).toUpperCase();
+                
+                document.getElementById('authScreenZone').style.display = "none";
+                initializeMqttNetwork();
+            }
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (mqttClient && mqttClient.connected && localUser) {
+                mqttClient.publish('insta/social/global/discovery', JSON.stringify({ 
+                    username: localUser, 
+                    uid: localUid, 
+                    status: 'offline' 
+                }));
+            }
+        });
+
+        function registerUserProfile() {
+            const input = document.getElementById('usernameInput').value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (input.length < 3) return alert("Usa al menos 3 caracteres alfanuméricos.");
+            
+            localUser = input;
+            
+            localStorage.setItem('p2p_local_user', localUser);
+            localStorage.setItem('p2p_local_uid', localUid);
+
+            document.getElementById('myProfileName').innerText = `@${localUser}`;
+            document.getElementById('myAvatarLetter').innerText = localUser.charAt(0).toUpperCase();
+            
+            document.getElementById('authScreenZone').style.display = "none";
+            initializeMqttNetwork();
+        }
+
+        function initializeMqttNetwork() {
+            mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+
+            mqttClient.on('connect', () => {
+                const statusLabel = document.getElementById('myStatusLabel');
+                statusLabel.innerText = "● En línea";
+                statusLabel.style.color = "var(--success)";
+
+                mqttClient.subscribe('insta/social/global/discovery');
+                
+                announcePresence();
+                setInterval(announcePresence, 4000);
+                setInterval(purgeOfflinePeers, 8000);
+                
+                renderFollowingList();
+            });
+
+            const handleDisconnectUI = () => {
+                const statusLabel = document.getElementById('myStatusLabel');
+                if (statusLabel) {
+                    statusLabel.innerText = "● Desconectado";
+                    statusLabel.style.color = "var(--danger)";
+                }
+            };
+
+            mqttClient.on('close', handleDisconnectUI);
+            mqttClient.on('offline', handleDisconnectUI);
+
+            mqttClient.on('message', (topic, raw) => {
+                try {
+                    const data = JSON.parse(raw.toString());
+
+                    if (topic === 'insta/social/global/discovery') {
+                        if (data.username !== localUser) {
+                            if (data.status === 'offline') {
+                                delete discoveredPeers[data.username];
+                            } else {
+                                discoveredPeers[data.username] = { uid: data.uid, lastSeen: Date.now() };
+                            }
+                            filterDiscoveryUsers();
+                        }
+                    } 
+                    else if (topic === `insta/social/direct/${currentSecretRoomId}`) {
+                        if (data.type === 'msg') {
+                            renderMessageBubble(data);
+                        } else if (data.type === 'react') {
+                            updateReactionBadgeUI(data.id, data.emoji);
+                        } else if (data.type === 'kill') {
+                            const node = document.getElementById(`msg-${data.id}`);
+                            if (node) node.remove();
+                        } else if (data.type === 'typing' && data.user !== localUser) {
+                            document.getElementById('typingLabel').innerText = data.isTyping ? `@${data.user} está escribiendo...` : '';
+                        }
+                    }
+                } catch(e) {}
+            });
+        }
+
+        function announcePresence() {
+            if (mqttClient && mqttClient.connected && localUser) {
+                mqttClient.publish('insta/social/global/discovery', JSON.stringify({ username: localUser, uid: localUid, status: 'online' }));
+            }
+        }
+
+        function purgeOfflinePeers() {
+            const now = Date.now();
+            let changed = false;
+            for (let peer in discoveredPeers) {
+                if (now - discoveredPeers[peer].lastSeen > 9000) {
+                    delete discoveredPeers[peer];
+                    changed = true;
+                }
+            }
+            if (changed) filterDiscoveryUsers();
+        }
+
+        function filterDiscoveryUsers() {
+            const query = document.getElementById('searchUserField').value.trim().toLowerCase();
+            const container = document.getElementById('discoveryList');
+            container.innerHTML = "";
+
+            let count = 0;
+            for (let peer in discoveredPeers) {
+                if (query && !peer.includes(query)) continue;
+                count++;
+
+                const isFollowing = followingUsers.includes(peer);
+                const item = document.createElement('div');
+                item.className = "user-item";
+                item.innerHTML = `
+                    <div class="user-meta">
+                        <div class="avatar-sm">${peer.charAt(0).toUpperCase()}</div>
+                        <div>
+                            <div style="font-weight:600; font-size:0.85rem;">@${peer}</div>
+                            <div class="online-dot"></div>
+                        </div>
+                    </div>
+                    <button class="btn-action ${isFollowing ? 'following' : ''}" onclick="toggleFollowUser('${peer}')">
+                        ${isFollowing ? 'Siguiendo' : 'Seguir'}
+                    </button>
+                `;
+                container.appendChild(item);
+            }
+            if (count === 0) {
+                container.innerHTML = `<p style="color:var(--text-muted); font-size:0.75rem; padding:15px; text-align:center;">No hay usuarios descubiertos.</p>`;
+            }
+        }
+
+        function renderFollowingList() {
+            const container = document.getElementById('followingList');
+            container.innerHTML = "";
+
+            if (followingUsers.length === 0) {
+                container.innerHTML = `<p style="color:var(--text-muted); font-size:0.75rem; padding:15px; text-align:center;">No sigues a nadie aún.</p>`;
+                return;
+            }
+
+            followingUsers.forEach(peer => {
+                const isCurrentActive = peer === activeChatPartner;
+                const item = document.createElement('div');
+                item.className = `user-item ${isCurrentActive ? 'active-chat-item' : ''}`;
+                item.innerHTML = `
+                    <div class="user-meta">
+                        <div class="avatar-sm" style="background:#1c1c1e;">${peer.charAt(0).toUpperCase()}</div>
+                        <div>
+                            <div style="font-weight:600; font-size:0.85rem;">@${peer}</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted);">Haz clic para abrir chat</div>
+                        </div>
+                    </div>
+                    <button class="btn-action chat-go" onclick="startPrivateChat('${peer}')">Chat</button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function toggleFollowUser(username) {
+            if (followingUsers.includes(username)) {
+                followingUsers = followingUsers.filter(u => u !== username);
+                if (activeChatPartner === username) exitChatToWaitingState();
+            } else {
+                followingUsers.push(username);
+            }
+            localStorage.setItem('p2p_following', JSON.stringify(followingUsers));
+            filterDiscoveryUsers();
+            renderFollowingList();
+        }
+
+        function startPrivateChat(partnerUsername) {
+            if (currentSecretRoomId && mqttClient) {
+                mqttClient.unsubscribe(`insta/social/direct/${currentSecretRoomId}`);
+            }
+
+            activeChatPartner = partnerUsername;
+            
+            const sortedCombination = [localUser, partnerUsername].sort();
+            currentSecretRoomId = btoa(sortedCombination[0] + "_" + sortedCombination[1]).replace(/=/g, "").substr(0, 15);
+
+            mqttClient.subscribe(`insta/social/direct/${currentSecretRoomId}`);
+
+            document.getElementById('chatTargetName').innerText = `@${partnerUsername}`;
+            document.getElementById('chatTargetAvatar').innerText = partnerUsername.charAt(0).toUpperCase();
+            document.getElementById('chatBox').innerHTML = ""; 
+            
+            document.getElementById('panelEmptyState').style.display = "none";
+            document.getElementById('panelActiveChatState').style.display = "flex";
+            
+            // DISPARADOR MÓVIL: Añadir clase de vista activa para celulares
+            document.getElementById('mainAppContainer').classList.add('chat-selected');
+            
+            renderFollowingList(); 
+            setTimeout(() => {
+                const box = document.getElementById('chatBox');
+                box.scrollTop = box.scrollHeight;
+            }, 50);
+        }
+
+        function exitChatToWaitingState() {
+            if (mqttClient && currentSecretRoomId) {
+                mqttClient.unsubscribe(`insta/social/direct/${currentSecretRoomId}`);
+            }
+            currentSecretRoomId = "";
+            activeChatPartner = "";
+            
+            document.getElementById('panelActiveChatState').style.display = "none";
+            document.getElementById('panelEmptyState').style.display = "flex";
+            
+            // DISPARADOR MÓVIL: Remover clase para volver a la lista de usuarios
+            document.getElementById('mainAppContainer').classList.remove('chat-selected');
+            
+            renderFollowingList();
+        }
+
+        function broadcastLocalTyping() {
+            if (!mqttClient || !currentSecretRoomId) return;
+            if (!isTypingToken) {
+                isTypingToken = true;
+                mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'typing', user: localUser, isTyping: true }));
+            }
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                isTypingToken = false;
+                mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'typing', user: localUser, isTyping: false }));
+            }, 1400);
+        }
+
+        function toggleSendBtn(input) {
+            document.getElementById('btnSend').style.display = input.value.trim() ? "block" : "none";
+        }
+
+        function submitMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            if (!text || !mqttClient || !currentSecretRoomId) return;
+
+            const msgId = "m_" + Date.now().toString(36) + Math.random().toString(36).substr(2, 3);
+            const payload = {
+                type: 'msg', id: msgId, user: localUser, text: text,
+                replyId: activeReplyId,
+                replyText: activeReplyId ? document.getElementById('replyTargetText').innerText : null,
+                replyUser: activeReplyId ? document.getElementById('replyTargetUser').innerText : null
+            };
+
+            mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify(payload));
+            renderMessageBubble(payload);
+            
+            input.value = "";
+            toggleSendBtn(input);
+            cancelReplyDock();
+            
+            isTypingToken = false;
+            mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'typing', user: localUser, isTyping: false }));
+        }
+
+        function renderMessageBubble(data) {
+            if (document.getElementById(`msg-${data.id}`)) return;
+
+            const chatBox = document.getElementById('chatBox');
+            const wrapper = document.createElement('div');
+            const isOutgoing = data.user === localUser;
+            
+            wrapper.className = `msg-wrapper ${isOutgoing ? 'outgoing' : 'incoming'}`;
+            wrapper.id = `msg-${data.id}`;
+
+            let quoteHtml = data.replyId ? `<div class="reply-quote-inside"><b>@${data.replyUser}</b>: ${data.replyText}</div>` : "";
+
+            wrapper.innerHTML = `
+                <div class="msg-bubble" id="bubble-${data.id}">
+                    ${quoteHtml}
+                    <span class="text-data">${data.text}</span>
+                    <div class="reaction-badge" id="react-${data.id}">❤️</div>
+                </div>
+            `;
+
+            chatBox.appendChild(wrapper);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            const bubble = wrapper.querySelector(`#bubble-${data.id}`);
+
+            // Doble toque (Double tap) para reaccionar rápido con Corazón
+            let lastClickTime = 0;
+            bubble.addEventListener('click', () => {
+                const now = Date.now();
+                if (now - lastClickTime < 300) {
+                    const badge = document.getElementById(`react-${data.id}`);
+                    const toggled = wrapper.classList.contains('has-reaction') && badge.innerText === '❤️';
+                    const targetEmoji = toggled ? null : '❤️';
+                    
+                    updateReactionBadgeUI(data.id, targetEmoji);
+                    if (mqttClient) {
+                        mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'react', id: data.id, emoji: targetEmoji }));
+                    }
+                }
+                lastClickTime = now;
+            });
+
+            // Presión prolongada (Long press) para Menú Contextual Completo
+            let touchTimer;
+            const startTouch = () => {
+                touchTimer = setTimeout(() => {
+                    openMessageMenu(data.id, data.user, data.text);
+                }, 600);
+            };
+            const endTouch = () => clearTimeout(touchTimer);
+
+            bubble.addEventListener('touchstart', startTouch);
+            bubble.addEventListener('touchend', endTouch);
+            bubble.addEventListener('mousedown', startTouch);
+            bubble.addEventListener('mouseup', endTouch);
+
+            // Gesto deslizar a la derecha para responder (Solo en mensajes entrantes)
+            if (!isOutgoing) {
+                let initialX = 0;
+                wrapper.addEventListener('touchstart', (e) => { initialX = e.touches[0].clientX; }, {passive: true});
+                wrapper.addEventListener('touchmove', (e) => {
+                    let driftX = e.touches[0].clientX - initialX;
+                    if (driftX > 0 && driftX < 85) wrapper.style.transform = `translateX(${driftX}px)`;
+                }, {passive: true});
+                wrapper.addEventListener('touchend', (e) => {
+                    let endDrift = e.changedTouches[0].clientX - initialX;
+                    wrapper.style.transform = "translateX(0px)";
+                    if (endDrift > 55) initiateReplyDock(data.id, data.text, data.user);
+                });
+            }
+        }
+
+        function updateReactionBadgeUI(id, emoji) {
+            const wrapper = document.getElementById(`msg-${id}`);
+            const badge = document.getElementById(`react-${id}`);
+            if (wrapper && badge) {
+                if (emoji) {
+                    badge.innerText = emoji;
+                    wrapper.classList.add('has-reaction');
+                } else {
+                    wrapper.classList.remove('has-reaction');
+                }
+            }
+        }
+
+        function initiateReplyDock(id, text, user) {
+            activeReplyId = id;
+            document.getElementById('replyTargetUser').innerText = `@${user}`;
+            document.getElementById('replyTargetText').innerText = text;
+            document.getElementById('replyDock').style.display = "flex";
+            document.getElementById('messageInput').focus();
+        }
+
+        function cancelReplyDock() {
+            activeReplyId = null;
+            document.getElementById('replyDock').style.display = "none";
+        }
+
+        function openMessageMenu(id, senderName, text) {
+            selectedMsgId = id;
+            selectedMsgSender = senderName;
+            selectedMsgText = text;
+            
+            document.getElementById('btnUnsendBtn').style.display = (senderName === localUser) ? "block" : "none";
+            document.getElementById('btnMenuReply').style.display = (senderName !== localUser) ? "block" : "none";
+            document.getElementById('messageMenuOverlay').style.display = "flex";
+        }
+
+        function closeMessageMenu() {
+            document.getElementById('messageMenuOverlay').style.display = "none";
+            selectedMsgId = null;
+        }
+
+        function applyEmojiReaction(emoji) {
+            if (!selectedMsgId) return;
+            const badge = document.getElementById(`react-${selectedMsgId}`);
+            const wrapper = document.getElementById(`msg-${selectedMsgId}`);
+            const stateMatch = wrapper.classList.contains('has-reaction') && badge.innerText === emoji;
+            const finalEmoji = stateMatch ? null : emoji;
+
+            updateReactionBadgeUI(selectedMsgId, finalEmoji);
+            if (mqttClient) {
+                mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'react', id: selectedMsgId, emoji: finalEmoji }));
+            }
+            closeMessageMenu();
+        }
+
+        function triggerReplyFromMenu() {
+            if (selectedMsgId) initiateReplyDock(selectedMsgId, selectedMsgText, selectedMsgSender);
+            closeMessageMenu();
+        }
+
+        function copyMessageText() {
+            if (selectedMsgText) navigator.clipboard.writeText(selectedMsgText);
+            closeMessageMenu();
+        }
+
+        function deleteMessageFlow(scope) {
+            if (!selectedMsgId) return;
+
+            if (scope === 'me') {
+                const node = document.getElementById(`msg-${selectedMsgId}`);
+                if (node) node.remove();
+            } else if (scope === 'everyone' && selectedMsgSender === localUser) {
+                if (mqttClient) {
+                    mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'kill', id: selectedMsgId }));
+                }
+                const node = document.getElementById(`msg-${selectedMsgId}`);
+                if (node) node.remove();
+            }
+            closeMessageMenu();
+        }
+    </script>
+</body>
+</html>
