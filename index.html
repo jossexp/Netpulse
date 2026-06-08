@@ -149,14 +149,19 @@
         
         .chat-container { flex: 1; background-color: var(--bg-app); overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
         
-        .msg-wrapper { display: flex; flex-direction: column; max-width: 75%; position: relative; animation: popIn 0.18s ease-out; }
+        .msg-wrapper { display: flex; flex-direction: column; max-width: 80%; position: relative; animation: popIn 0.18s ease-out; }
         .msg-wrapper.outgoing { align-self: flex-end; }
         .msg-wrapper.incoming { align-self: flex-start; }
         
-        .msg-bubble { padding: 11px 16px; border-radius: 22px; font-size: 0.95rem; line-height: 1.4; position: relative; word-wrap: break-word; user-select: text; }
+        .msg-bubble { padding: 11px 16px; border-radius: 22px; font-size: 0.95rem; line-height: 1.4; position: relative; word-wrap: break-word; user-select: text; min-width: 60px; }
         .outgoing .msg-bubble { background: var(--accent-gradient); color: #fff; border-bottom-right-radius: 5px; }
         .incoming .msg-bubble { background: var(--bg-bubble-in); color: var(--text-main); border-bottom-left-radius: 5px; }
         
+        /* Estilos del reproductor de audio dentro del chat */
+        .msg-bubble audio { max-width: 240px; height: 36px; margin-top: 4px; display: block; border-radius: 8px; outline: none; }
+        .incoming .msg-bubble audio { filter: invert(0.9) hue-rotate(180deg); } /* Oscurece el reproductor nativo en burbujas grises */
+        .outgoing .msg-bubble audio { filter: invert(1) brightness(1.2); } /* Adapta el reproductor a burbujas degradadas */
+
         .reply-quote-inside { background: rgba(0, 0, 0, 0.15); padding: 6px 10px; border-radius: 12px; border-left: 2.5px solid rgba(255, 255, 255, 0.7); font-size: 0.78rem; margin-bottom: 6px; color: rgba(255,255,255,0.85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .reaction-badge { position: absolute; bottom: -8px; right: 12px; background: #1e1e1e; border: 1.5px solid #000; border-radius: 12px; padding: 1px 6px; font-size: 0.75rem; display: none; z-index: 2; animation: elasticPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         .msg-wrapper.has-reaction .reaction-badge { display: block; }
@@ -165,9 +170,12 @@
         .reply-preview-content { border-left: 2px solid var(--accent-blue); padding-left: 10px; font-size: 0.82rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         .input-area { background: var(--bg-app); padding: 12px 16px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 4px; }
-        .input-wrapper { flex: 1; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 24px; padding: 2px 16px; display: flex; align-items: center; min-height: 44px; }
+        .input-wrapper { flex: 1; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 24px; padding: 2px 8px 2px 16px; display: flex; align-items: center; min-height: 44px; gap: 8px; }
         .input-wrapper input { flex: 1; background: transparent; border: none; color: #fff; outline: none; font-size: 0.95rem; padding: 10px 0; user-select: text; }
-        .send-btn { background: transparent; border: none; color: var(--accent-blue); font-weight: 700; font-size: 0.95rem; cursor: pointer; padding-left: 8px; display: none; }
+        
+        .mic-btn { background: transparent; border: none; color: var(--text-muted); font-size: 1.25rem; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; transition: scale 0.15s; }
+        .mic-btn.recording { color: var(--danger); animation: pulseRecord 1.2s infinite; scale: 1.15; }
+        .send-btn { background: transparent; border: none; color: var(--accent-blue); font-weight: 700; font-size: 0.95rem; cursor: pointer; padding: 0 8px; display: none; }
         .typing-status-label { font-size: 0.75rem; color: var(--text-muted); padding-left: 8px; min-height: 14px; }
 
         /* Action Sheet Contextual */
@@ -182,6 +190,7 @@
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         @keyframes popIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         @keyframes elasticPop { 0% { transform: scale(0); } 70% { transform: scale(1.2); } 100% { transform: scale(1); } }
+        @keyframes pulseRecord { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -231,7 +240,7 @@
             <div class="empty-chat-state" id="panelEmptyState">
                 <div class="empty-icon-wrap">✈️</div>
                 <h2 style="font-weight: 400; font-size: 1.3rem; margin-bottom: 6px;">Tus Mensajes</h2>
-                <p style="color: var(--text-muted); font-size: 0.88rem; max-width: 260px; line-height: 1.4;">Envía fotos y mensajes privados a un amigo tras conectar de forma directa.</p>
+                <p style="color: var(--text-muted); font-size: 0.88rem; max-width: 260px; line-height: 1.4;">Envía fotos, audios y mensajes privados a un amigo tras conectar de forma directa.</p>
             </div>
 
             <div class="active-chat-state" id="panelActiveChatState">
@@ -260,6 +269,7 @@
                     <div class="typing-status-label" id="typingLabel"></div>
                     <div class="input-wrapper">
                         <input type="text" id="messageInput" placeholder="Envía un mensaje plano..." oninput="toggleSendBtn(this); broadcastLocalTyping()">
+                        <button class="mic-btn" id="btnMic" onclick="handleVoiceAudioRecording()">🎙️</button>
                         <button class="send-btn" id="btnSend" onclick="submitMessage()">Enviar</button>
                     </div>
                 </div>
@@ -279,7 +289,7 @@
                 <button class="emoji-btn" onclick="applyEmojiReaction('🔥')">🔥</button>
             </div>
             <button class="sheet-option" id="btnMenuReply" onclick="triggerReplyFromMenu()">Responder</button>
-            <button class="sheet-option" onclick="copyMessageText()">Copiar texto</button>
+            <button class="sheet-option" id="btnMenuCopy" onclick="copyMessageText()">Copiar texto</button>
             <button class="sheet-option destructive" id="btnUnsendBtn" onclick="deleteMessageFlow('everyone')">Anular envío (Para todos)</button>
             <button class="sheet-option destructive" onclick="deleteMessageFlow('me')">Eliminar para mí</button>
             <button class="sheet-option cancel" onclick="closeMessageMenu()">Cancelar</button>
@@ -292,6 +302,12 @@
         let localUid = "u_" + Math.random().toString(36).substr(2, 9);
         
         let discoveredPeers = {}; 
+        
+        // Elementos de audio globales
+        let voiceMediaRecorder = null;
+        let audioRecordingChunks = [];
+        let isVoiceRecordingActive = false;
+        let voiceStreamRef = null;
         
         // Sanitización estricta anti-duplicados al cargar arrays desde LocalStorage
         let followingUsers = [...new Set(JSON.parse(localStorage.getItem('p2p_following')) || [])]; 
@@ -306,6 +322,7 @@
         let selectedMsgId = null;
         let selectedMsgSender = null;
         let selectedMsgText = null;
+        let selectedMsgType = "text";
         let activeReplyId = null;
         let isTypingToken = false;
         let typingTimeout = null;
@@ -342,8 +359,9 @@
 
         function pushSystemNotification(sender, messageText) {
             if (Notification.permission === "granted") {
+                const preview = messageText.startsWith('data:audio') ? "🎙️ Nota de voz" : messageText;
                 const options = {
-                    body: messageText,
+                    body: preview,
                     icon: 'https://cdn-icons-png.flaticon.com/512/1384/1384063.png',
                     vibrate: [200, 100, 200],
                     tag: 'p2p-msg-' + sender,
@@ -415,7 +433,6 @@
                             if (data.status === 'offline') {
                                 delete discoveredPeers[data.username];
                             } else {
-                                // Al usar data.username como propiedad clave de un objeto, se machaca el registro anterior garantizando que no se duplique
                                 discoveredPeers[data.username] = { uid: data.uid, lastSeen: Date.now() };
                             }
                             filterDiscoveryUsers();
@@ -425,7 +442,7 @@
                         if (data.type === 'follow_req') {
                             if (!pendingRequests.includes(data.from) && !followingUsers.includes(data.from)) {
                                 pendingRequests.push(data.from);
-                                pendingRequests = [...new Set(pendingRequests)]; // Filtro preventivo de unicidad
+                                pendingRequests = [...new Set(pendingRequests)];
                                 localStorage.setItem('p2p_pending_requests', JSON.stringify(pendingRequests));
                                 renderPendingRequests();
                                 pushSystemNotification(data.from, "Te ha enviado una solicitud de seguimiento.");
@@ -435,7 +452,7 @@
                             localStorage.setItem('p2p_sent_requests', JSON.stringify(sentRequests));
                             if (!followingUsers.includes(data.from)) {
                                 followingUsers.push(data.from);
-                                followingUsers = [...new Set(followingUsers)]; // Filtro preventivo de unicidad
+                                followingUsers = [...new Set(followingUsers)];
                                 localStorage.setItem('p2p_following', JSON.stringify(followingUsers));
                                 
                                 const sortedCombination = [localUser, data.from].sort();
@@ -521,7 +538,6 @@
             }
 
             title.style.display = "block";
-            // Sanitización estricta usando Set para la renderización
             [...new Set(pendingRequests)].forEach(peer => {
                 const item = document.createElement('div');
                 item.className = "user-item";
@@ -575,24 +591,22 @@
             filterDiscoveryUsers();
         }
 
-        // FILTRO DE BÚSQUEDA GLOBAL CON PRIVACIDAD INTEGRAL
         function filterDiscoveryUsers() {
             const query = document.getElementById('searchUserField').value.trim().toLowerCase();
             const container = document.getElementById('discoveryList');
             container.innerHTML = "";
 
-            // PRIVACIDAD: Si el cuadro de texto está vacío, ocultar toda traza de usuarios activos
             if (!query) {
                 container.innerHTML = `<p style="color:var(--text-muted); font-size:0.75rem; padding:15px; text-align:center;">Escribe en el buscador para encontrar usuarios...</p>`;
                 return;
             }
 
             let count = 0;
-            let renderedNames = new Set(); // Estructura local para interceptar duplicados
+            let renderedNames = new Set();
 
             for (let peer in discoveredPeers) {
                 if (!peer.includes(query)) continue;
-                if (renderedNames.has(peer)) continue; // Evita renderizar elementos duplicados
+                if (renderedNames.has(peer)) continue;
                 
                 renderedNames.add(peer);
                 count++;
@@ -658,7 +672,6 @@
             const container = document.getElementById('followingList');
             container.innerHTML = "";
 
-            // Limpieza estricta de redundancia en la colección de seguidos
             const uniqueFollowing = [...new Set(followingUsers)];
 
             if (uniqueFollowing.length === 0) {
@@ -745,7 +758,88 @@
         }
 
         function toggleSendBtn(input) {
-            document.getElementById('btnSend').style.display = input.value.trim() ? "block" : "none";
+            const hasText = !!input.value.trim();
+            document.getElementById('btnSend').style.display = hasText ? "block" : "none";
+            document.getElementById('btnMic').style.display = hasText ? "none" : "block";
+        }
+
+        /* ================= GESTOR DE AUDIO GRABACIÓN (AUDIO VOICE NOTES) ================= */
+        async function handleVoiceAudioRecording() {
+            const micBtn = document.getElementById('btnMic');
+            const inputField = document.getElementById('messageInput');
+
+            if (!isVoiceRecordingActive) {
+                // Iniciar proceso de captura
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    alert("Tu navegador o conexión segura no soporta la grabación de audio.");
+                    return;
+                }
+
+                try {
+                    voiceStreamRef = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    audioRecordingChunks = [];
+                    
+                    // Configuración del codificador nativo
+                    voiceMediaRecorder = new MediaRecorder(voiceStreamRef);
+                    
+                    voiceMediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            audioRecordingChunks.push(event.data);
+                        }
+                    };
+
+                    voiceMediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioRecordingChunks, { type: 'audio/webm; codecs=opus' });
+                        const fileReader = new FileReader();
+                        fileReader.readAsDataURL(audioBlob);
+                        fileReader.onloadend = () => {
+                            const base64AudioData = fileReader.result;
+                            transmitAudioPayload(base64AudioData);
+                        };
+                        
+                        // Apagar hardware de micrófono al terminar
+                        if (voiceStreamRef) {
+                            voiceStreamRef.getTracks().forEach(track => track.stop());
+                        }
+                    };
+
+                    voiceMediaRecorder.start();
+                    isVoiceRecordingActive = true;
+                    micBtn.innerText = "🛑";
+                    micBtn.classList.add('recording');
+                    inputField.placeholder = "Grabando nota de voz activa...";
+                    inputField.disabled = true;
+
+                } catch (err) {
+                    alert("Error o permiso denegado al acceder al micrófono: " + err);
+                }
+            } else {
+                // Detener captura y disparar empaquetado
+                if (voiceMediaRecorder && voiceMediaRecorder.state !== "inactive") {
+                    voiceMediaRecorder.stop();
+                }
+                isVoiceRecordingActive = false;
+                micBtn.innerText = "🎙️";
+                micBtn.classList.remove('recording');
+                inputField.placeholder = "Envía un mensaje plano...";
+                inputField.disabled = false;
+            }
+        }
+
+        function transmitAudioPayload(base64Audio) {
+            if (!mqttClient || !currentSecretRoomId) return;
+
+            const msgId = "m_" + Date.now().toString(36) + Math.random().toString(36).substr(2, 3);
+            const payload = {
+                type: 'msg', id: msgId, user: localUser, text: base64Audio, msgType: 'audio',
+                replyId: activeReplyId,
+                replyText: activeReplyId ? document.getElementById('replyTargetText').innerText : null,
+                replyUser: activeReplyId ? document.getElementById('replyTargetUser').innerText : null
+            };
+
+            mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify(payload));
+            renderMessageBubble(payload);
+            cancelReplyDock();
         }
 
         function submitMessage() {
@@ -755,7 +849,7 @@
 
             const msgId = "m_" + Date.now().toString(36) + Math.random().toString(36).substr(2, 3);
             const payload = {
-                type: 'msg', id: msgId, user: localUser, text: text,
+                type: 'msg', id: msgId, user: localUser, text: text, msgType: 'text',
                 replyId: activeReplyId,
                 replyText: activeReplyId ? document.getElementById('replyTargetText').innerText : null,
                 replyUser: activeReplyId ? document.getElementById('replyTargetUser').innerText : null
@@ -800,10 +894,20 @@
 
             let quoteHtml = data.replyId ? `<div class="reply-quote-inside"><b>@${data.replyUser}</b>: ${data.replyText}</div>` : "";
 
+            // Discriminación de Renderizado: Texto Plano vs Reproductor de Audio
+            let contentCoreHtml = "";
+            const isAudioType = data.msgType === 'audio' || data.text.startsWith('data:audio');
+            
+            if (isAudioType) {
+                contentCoreHtml = `<audio controls src="${data.text}" preload="metadata"></audio>`;
+            } else {
+                contentCoreHtml = `<span class="text-data">${data.text}</span>`;
+            }
+
             wrapper.innerHTML = `
                 <div class="msg-bubble" id="bubble-${data.id}">
                     ${quoteHtml}
-                    <span class="text-data">${data.text}</span>
+                    ${contentCoreHtml}
                     <div class="reaction-badge" id="react-${data.id}">${initialEmoji}</div>
                 </div>
             `;
@@ -817,7 +921,7 @@
             bubble.addEventListener('click', () => {
                 const now = Date.now();
                 if (now - lastClickTime < 300) {
-                    const badge = document.getElementById(`react-${data.id}`);
+                    const badge = document.getElementById('react-' + data.id);
                     const toggled = wrapper.classList.contains('has-reaction') && badge.innerText === '❤️';
                     const targetEmoji = toggled ? null : '❤️';
                     
@@ -830,7 +934,7 @@
             });
 
             let touchTimer;
-            const startTouch = () => { touchTimer = setTimeout(() => { openMessageMenu(data.id, data.user, data.text); }, 600); };
+            const startTouch = () => { touchTimer = setTimeout(() => { openMessageMenu(data.id, data.user, data.text, isAudioType ? "audio" : "text"); }, 600); };
             const endTouch = () => clearTimeout(touchTimer);
 
             bubble.addEventListener('touchstart', startTouch);
@@ -848,7 +952,10 @@
                 wrapper.addEventListener('touchend', (e) => {
                     let endDrift = e.changedTouches[0].clientX - initialX;
                     wrapper.style.transform = "translateX(0px)";
-                    if (endDrift > 55) initiateReplyDock(data.id, data.text, data.user);
+                    if (endDrift > 55) {
+                        const previewText = isAudioType ? "🎙️ Nota de voz" : data.text;
+                        initiateReplyDock(data.id, previewText, data.user);
+                    }
                 });
             }
         }
@@ -899,13 +1006,18 @@
             document.getElementById('replyDock').style.display = "none";
         }
 
-        function openMessageMenu(id, senderName, text) {
+        function openMessageMenu(id, senderName, text, computedType) {
             selectedMsgId = id;
             selectedMsgSender = senderName;
             selectedMsgText = text;
+            selectedMsgType = computedType;
             
             document.getElementById('btnUnsendBtn').style.display = (senderName === localUser) ? "block" : "none";
             document.getElementById('btnMenuReply').style.display = (senderName !== localUser) ? "block" : "none";
+            
+            // Ocultar opción de copiar texto si el mensaje seleccionado es un archivo de audio binario
+            document.getElementById('btnMenuCopy').style.display = (computedType === "audio") ? "none" : "block";
+            
             document.getElementById('messageMenuOverlay').style.display = "flex";
         }
 
@@ -929,12 +1041,17 @@
         }
 
         function triggerReplyFromMenu() {
-            if (selectedMsgId) initiateReplyDock(selectedMsgText, selectedMsgSender);
+            if (selectedMsgId) {
+                const finalStr = (selectedMsgType === "audio") ? "🎙️ Nota de voz" : selectedMsgText;
+                initiateReplyDock(selectedMsgId, finalStr, selectedMsgSender);
+            }
             closeMessageMenu();
         }
 
         function copyMessageText() {
-            if (selectedMsgText) navigator.clipboard.writeText(selectedMsgText);
+            if (selectedMsgText && selectedMsgType !== "audio") {
+                navigator.clipboard.writeText(selectedMsgText);
+            }
             closeMessageMenu();
         }
 
