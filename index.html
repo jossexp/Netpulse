@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Instagram Direct - Web Split P2P</title>
+    <title>NetPulse - Web Split P2P</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         :root {
@@ -209,7 +209,7 @@
         
         <div class="auth-overlay" id="authScreenZone">
             <div class="auth-screen">
-                <div class="auth-logo">Instagram</div>
+                <div class="auth-logo">NetPulse</div>
                 <p style="color: var(--text-muted); margin-bottom: 24px; font-size: 0.92rem;">Crea tu perfil dinámico para acceder a la mensajería P2P.</p>
                 <div class="auth-card">
                     <input type="text" id="usernameInput" placeholder="Nombre de usuario (ej: yuta09)" autocomplete="off">
@@ -364,7 +364,6 @@
                 initializeMqttNetwork();
             }
 
-            // Cierre preventivo de la bandeja al hacer clic fuera de ella
             document.addEventListener('click', (e) => {
                 const tray = document.getElementById('notificationTray');
                 const wrapper = document.querySelector('.noti-wrapper');
@@ -376,7 +375,7 @@
 
         window.addEventListener('beforeunload', () => {
             if (mqttClient && mqttClient.connected && localUser) {
-                mqttClient.publish('insta/social/global/discovery', JSON.stringify({ 
+                mqttClient.publish('netpulse/social/global/discovery', JSON.stringify({ 
                     username: localUser, uid: localUid, status: 'offline' 
                 }));
             }
@@ -434,13 +433,13 @@
                 statusLabel.innerText = "● En línea";
                 statusLabel.style.color = "var(--success)";
 
-                mqttClient.subscribe('insta/social/global/discovery');
-                mqttClient.subscribe(`insta/social/user/${localUser}/inbox`);
+                mqttClient.subscribe('netpulse/social/global/discovery');
+                mqttClient.subscribe(`netpulse/social/user/${localUser}/inbox`);
                 
                 followingUsers.forEach(peer => {
                     const sortedCombination = [localUser, peer].sort();
                     const roomId = btoa(sortedCombination[0] + "_" + sortedCombination[1]).replace(/=/g, "").substr(0, 15);
-                    mqttClient.subscribe(`insta/social/direct/${roomId}`);
+                    mqttClient.subscribe(`netpulse/social/direct/${roomId}`);
                 });
 
                 requestNotificationPermissions();
@@ -467,7 +466,7 @@
                 try {
                     const data = JSON.parse(raw.toString());
 
-                    if (topic === 'insta/social/global/discovery') {
+                    if (topic === 'netpulse/social/global/discovery') {
                         if (data.username !== localUser) {
                             if (data.status === 'offline') {
                                 delete discoveredPeers[data.username];
@@ -477,7 +476,7 @@
                             filterDiscoveryUsers();
                         }
                     } 
-                    else if (topic === `insta/social/user/${localUser}/inbox`) {
+                    else if (topic === `netpulse/social/user/${localUser}/inbox`) {
                         if (data.type === 'follow_req') {
                             if (!pendingRequests.includes(data.from) && !followingUsers.includes(data.from)) {
                                 pendingRequests.push(data.from);
@@ -496,7 +495,7 @@
                                 
                                 const sortedCombination = [localUser, data.from].sort();
                                 const roomId = btoa(sortedCombination[0] + "_" + sortedCombination[1]).replace(/=/g, "").substr(0, 15);
-                                mqttClient.subscribe(`insta/social/direct/${roomId}`);
+                                mqttClient.subscribe(`netpulse/social/direct/${roomId}`);
                             }
                             filterDiscoveryUsers();
                             renderFollowingList();
@@ -507,7 +506,7 @@
                             filterDiscoveryUsers();
                         }
                     }
-                    else if (topic.startsWith('insta/social/direct/')) {
+                    else if (topic.startsWith('netpulse/social/direct/')) {
                         const roomInTopic = topic.split('/').pop();
 
                         if (data.type === 'msg') {
@@ -550,7 +549,7 @@
 
         function announcePresence() {
             if (mqttClient && mqttClient.connected && localUser) {
-                mqttClient.publish('insta/social/global/discovery', JSON.stringify({ username: localUser, uid: localUid, status: 'online' }));
+                mqttClient.publish('netpulse/social/global/discovery', JSON.stringify({ username: localUser, uid: localUid, status: 'online' }));
             }
         }
 
@@ -566,7 +565,6 @@
             if (changed) filterDiscoveryUsers();
         }
 
-        /* RENDERIZADO DINÁMICO DE LA BANDEJA DE NOTIFICACIONES */
         function renderPendingRequests() {
             const container = document.getElementById('requestsList');
             const badge = document.getElementById('notiBellBadge');
@@ -577,7 +575,7 @@
             if (activeRequests.length === 0) {
                 badge.style.display = "none";
                 badge.innerText = "0";
-                container.innerHTML = `<div class="noti-empty-state">No tienes solicitudes de seguimiento pendientes.</div>`;
+                container.innerHTML = `<div class="noti-empty-state">No tienes solicitudes pendientes.</div>`;
                 return;
             }
 
@@ -616,8 +614,8 @@
                 const sortedCombination = [localUser, username].sort();
                 const roomId = btoa(sortedCombination[0] + "_" + sortedCombination[1]).replace(/=/g, "").substr(0, 15);
                 if (mqttClient && mqttClient.connected) {
-                    mqttClient.subscribe(`insta/social/direct/${roomId}`);
-                    mqttClient.publish(`insta/social/user/${username}/inbox`, JSON.stringify({ type: 'follow_accept', from: localUser }));
+                    mqttClient.subscribe(`netpulse/social/direct/${roomId}`);
+                    mqttClient.publish(`netpulse/social/user/${username}/inbox`, JSON.stringify({ type: 'follow_accept', from: localUser }));
                 }
             }
 
@@ -631,7 +629,7 @@
             localStorage.setItem('p2p_pending_requests', JSON.stringify(pendingRequests));
 
             if (mqttClient && mqttClient.connected) {
-                mqttClient.publish(`insta/social/user/${username}/inbox`, JSON.stringify({ type: 'follow_decline', from: localUser }));
+                mqttClient.publish(`netpulse/social/user/${username}/inbox`, JSON.stringify({ type: 'follow_decline', from: localUser }));
             }
 
             renderPendingRequests();
@@ -689,7 +687,7 @@
                 container.appendChild(item);
             }
             if (count === 0) {
-                container.innerHTML = `<p style="color:var(--text-muted); font-size:0.75rem; padding:15px; text-align:center;">No se encontraron usuarios activos con ese nombre.</p>`;
+                container.innerHTML = `<p style="color:var(--text-muted); font-size:0.75rem; padding:15px; text-align:center;">No se encontraron usuarios activos.</p>`;
             }
         }
 
@@ -700,7 +698,7 @@
                 
                 const sortedCombination = [localUser, username].sort();
                 const roomId = btoa(sortedCombination[0] + "_" + sortedCombination[1]).replace(/=/g, "").substr(0, 15);
-                if (mqttClient) mqttClient.unsubscribe(`insta/social/direct/${roomId}`);
+                if (mqttClient) mqttClient.unsubscribe(`netpulse/social/direct/${roomId}`);
                 
                 if (activeChatPartner === username) exitChatToWaitingState();
             } else if (!isPending) {
@@ -708,7 +706,7 @@
                 sentRequests = [...new Set(sentRequests)];
                 localStorage.setItem('p2p_sent_requests', JSON.stringify(sentRequests));
                 if (mqttClient && mqttClient.connected) {
-                    mqttClient.publish(`insta/social/user/${username}/inbox`, JSON.stringify({ type: 'follow_req', from: localUser }));
+                    mqttClient.publish(`netpulse/social/user/${username}/inbox`, JSON.stringify({ type: 'follow_req', from: localUser }));
                 }
             }
             filterDiscoveryUsers();
@@ -742,7 +740,7 @@
                         <div class="avatar-sm" style="background:#1c1c1e;">${peer.charAt(0).toUpperCase()}</div>
                         <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
                             <div style="font-weight:600; font-size:0.85rem;">@${peer}</div>
-                            <div style="font-size:0.72rem; color:var(--text-muted);">Chat persistente</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted);">Chat privado</div>
                         </div>
                         ${bubbleHtml}
                     </div>
@@ -795,12 +793,12 @@
             if (!mqttClient || !currentSecretRoomId) return;
             if (!isTypingToken) {
                 isTypingToken = true;
-                mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'typing', user: localUser, isTyping: true }));
+                mqttClient.publish(`netpulse/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'typing', user: localUser, isTyping: true }));
             }
             clearTimeout(typingTimeout);
             typingTimeout = setTimeout(() => {
                 isTypingToken = false;
-                mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'typing', user: localUser, isTyping: false }));
+                mqttClient.publish(`netpulse/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'typing', user: localUser, isTyping: false }));
             }, 1400);
         }
 
@@ -854,7 +852,7 @@
                     inputField.disabled = true;
 
                 } catch (err) {
-                    alert("Error o permiso denegado al acceder al micrófono: " + err);
+                    alert("Error al acceder al micrófono: " + err);
                 }
             } else {
                 if (voiceMediaRecorder && voiceMediaRecorder.state !== "inactive") {
@@ -879,7 +877,7 @@
                 replyUser: activeReplyId ? document.getElementById('replyTargetUser').innerText : null
             };
 
-            mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify(payload));
+            mqttClient.publish(`netpulse/social/direct/${currentSecretRoomId}`, JSON.stringify(payload));
             renderMessageBubble(payload);
             cancelReplyDock();
         }
@@ -897,7 +895,7 @@
                 replyUser: activeReplyId ? document.getElementById('replyTargetUser').innerText : null
             };
 
-            mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify(payload));
+            mqttClient.publish(`netpulse/social/direct/${currentSecretRoomId}`, JSON.stringify(payload));
             renderMessageBubble(payload);
             
             input.value = "";
@@ -905,7 +903,7 @@
             cancelReplyDock();
             
             isTypingToken = false;
-            mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'typing', user: localUser, isTyping: false }));
+            mqttClient.publish(`netpulse/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'typing', user: localUser, isTyping: false }));
         }
 
         function saveMessageToSilentHistory(partner, data) {
@@ -968,7 +966,7 @@
                     
                     updateReactionBadgeUI(data.id, targetEmoji);
                     if (mqttClient) {
-                        mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'react', id: data.id, emoji: targetEmoji }));
+                        mqttClient.publish(`netpulse/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'react', id: data.id, emoji: targetEmoji }));
                     }
                 }
                 lastClickTime = now;
@@ -1074,7 +1072,7 @@
 
             updateReactionBadgeUI(selectedMsgId, finalEmoji);
             if (mqttClient) {
-                mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'react', id: selectedMsgId, emoji: finalEmoji }));
+                mqttClient.publish(`netpulse/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'react', id: selectedMsgId, emoji: finalEmoji }));
             }
             closeMessageMenu();
         }
@@ -1103,7 +1101,7 @@
                 removeMessageFromHistory(selectedMsgId);
             } else if (scope === 'everyone' && selectedMsgSender === localUser) {
                 if (mqttClient) {
-                    mqttClient.publish(`insta/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'kill', id: selectedMsgId }));
+                    mqttClient.publish(`netpulse/social/direct/${currentSecretRoomId}`, JSON.stringify({ type: 'kill', id: selectedMsgId }));
                 }
                 const node = document.getElementById(`msg-${selectedMsgId}`);
                 if (node) node.remove();
